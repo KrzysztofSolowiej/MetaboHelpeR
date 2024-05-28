@@ -5,7 +5,7 @@ Version: 0.1.0
 Author: Krzysztof Solowiej
 Maintainer: Krzysztof Solowiej <krzysztof.solowiej@umb.edu.pl>
 Description: MetaboHelpeR is a package developped by Center of Clinical Research which is part of Medical University of Bialystok.
-    Besides rocessing and visualizing metabolomic data, it can perform various statistical tests as well as detect outliers.
+    Besides processing and visualizing metabolomic data, it can perform various statistical tests as well as detect outliers.
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
