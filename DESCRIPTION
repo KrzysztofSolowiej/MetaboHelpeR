@@ -6,8 +6,41 @@ Author: Krzysztof Solowiej
 Maintainer: Krzysztof Solowiej <krzysztof.solowiej@umb.edu.pl>
 Description: MetaboHelpeR is a package developped by Center of Clinical Research which is part of Medical University of Bialystok.
     Besides processing and visualizing metabolomic data, it can perform various statistical tests as well as detect outliers.
-License: What license is it under?
+License: MIT
 Encoding: UTF-8
 LazyData: true
 URL: https://github.com/KrzysztofSolowiej/MetaboHelpeR
 BugReports: https://github.com/KrzysztofSolowiej/MetaboHelpeR/issues
+Depends:
+    R (>= 3.5.0)
+Imports:
+    devtools,
+    shiny,
+    shinydashboard,
+    shinyWidgets,
+    readr,
+    readxl,
+    tidyr,
+    dplyr,
+    data.table,
+    purrr,
+    ggplot2,
+    ggrepel,
+    ggbeeswarm,
+    gtools,
+    Rfast,
+    outliers,
+    MASS,
+    isotree,
+    pls,
+    dbscan,
+    plotly,
+    sortable,
+    stringr,
+    randomForest,
+    bestNormalize,
+    car,
+    beanplot,
+    shinycssloaders,
+    shinyjs,
+    preprocessCore
