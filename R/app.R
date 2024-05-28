@@ -133,7 +133,7 @@ ui <- fluidPage(
 # Main panel ------------------------
 
     mainPanel(
-      includeCSS("R/www/style.css"),
+      #includeCSS("R/www/style.css"),
       tabsetPanel(id = "tabsetPanelID",
         tabPanel(id = 'processy', 'Pre-process',
                  withSpinner(DT::DTOutput('process_data')),
