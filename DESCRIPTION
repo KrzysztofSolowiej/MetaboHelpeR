@@ -9,3 +9,5 @@ Description: MetaboHelpeR is a package developped by Center of Clinical Research
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
+URL: https://github.com/KrzysztofSolowiej/MetaboHelpeR
+BugReports: https://github.com/KrzysztofSolowiej/MetaboHelpeR/issues
