@@ -1,3 +1,5 @@
+MetaboHelpeR <- function(...) {
+
 library(shiny)
 library(shinydashboard)
 library(shinyWidgets)
@@ -28,7 +30,6 @@ library(shinycssloaders)
 library(shinyjs)
 library(preprocessCore)
 
-MetaboHelpeR <- function(...) {
 
 ui <- fluidPage(
   useShinyjs(),
