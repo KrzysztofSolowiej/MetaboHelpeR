@@ -134,6 +134,49 @@ ui <- fluidPage(
 
     mainPanel(
       #includeCSS("R/www/style.css"),
+      tags$head(
+        tags$style(HTML("
+        #hover_histogram_container {
+            position: absolute;
+            top: 0px;
+            left: 700px;
+            width: 40%;
+        }
+        #plot_for_hover {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            width: 60%;
+        }
+        #hover_beanplot_container {
+            position: absolute;
+            top: 0px;
+            left: 700px;
+            width: 40%;
+        }
+        #levene_for_hover {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            width: 60%;
+        }
+        #hover_para_container,
+        #hover_non_para_container {
+            position: absolute;
+            top: 0px;
+            right: 0px;
+            width: 40%;
+        }
+
+        #para_for_hover,
+        #non_para_for_hover {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            width: 60%;
+        }
+      "))
+      ),
       tabsetPanel(id = "tabsetPanelID",
         tabPanel(id = 'processy', 'Pre-process',
                  withSpinner(DT::DTOutput('process_data')),

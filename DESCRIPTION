@@ -43,4 +43,5 @@ Imports:
     beanplot,
     shinycssloaders,
     shinyjs,
+    BiocManager,
     preprocessCore
