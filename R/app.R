@@ -35,7 +35,12 @@ ui <- fluidPage(
   useShinyjs(),
   titlePanel(title = span("MetaboHelpeR", style = "color: #0052cc; font-size: 55px; font-weight: bold; font-family: 'K2D';")),
   tags$head(
-    tags$link(rel = "stylesheet", href = "https://fonts.googleapis.com/css2?family=K2D:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800&display=swap")
+    tags$link(rel = "stylesheet", href = "https://fonts.googleapis.com/css2?family=K2D:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800&display=swap"),
+    tags$script(HTML('
+      $(document).ready(function(){
+        $(\'[data-toggle="tooltip"]\').tooltip({html: true});
+      });
+    '))
   ),
   sidebarLayout(
     sidebarPanel(
@@ -1017,7 +1022,16 @@ server <- function(input, output, session) {
     req(input$pca_dropdown)
     if (!is.null(processed_data()) && active_tab() == "Outlier detection" && input$pca_dropdown == "Row") {
       output$pca_interest_check <- renderUI({
-        checkboxInput('interest_check', 'Show points of interest', value = FALSE)
+        div(
+          style = "display: flex; align-items: start;",
+          checkboxInput('interest_check', 'Show points of interest', value = FALSE),
+          span(
+            "?",
+            style = "cursor: pointer; color: blue; margin-left: 5px; vertical-align: baseline;",
+            `data-toggle` = "tooltip",
+            title = "Scores compounds based on the sum of scaled mean and scaled RSD."
+          )
+        )
       })
     } else {
       output$pca_interest_check <- renderUI({
