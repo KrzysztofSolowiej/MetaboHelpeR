@@ -2860,7 +2860,7 @@ server <- function(input, output, session) {
       filter(Combined_Score > int_threshold)
 
     interesting_points <- full_df %>%
-      filter(Compound %in% point_of_int[[common_column()]])
+      filter(Compound %in% pull(point_of_int, .data[[common_column()]]))
 
     if (pca_type == "Column") {
       plot <- try(ggplot() +
