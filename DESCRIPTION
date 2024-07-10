@@ -45,4 +45,5 @@ Imports:
     shinycssloaders,
     shinyjs,
     BiocManager,
-    preprocessCore
+    preprocessCore,
+    dunn.test

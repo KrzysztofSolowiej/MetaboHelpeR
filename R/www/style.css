@@ -63,6 +63,14 @@
     width: 40%;
 }
 
+#tukey_hover_container,
+#dunn_hover_container {
+  position: absolute;
+  top: 360px;
+  right: 0px;
+  width: 40%;
+}
+
 #para_for_hover,
 #non_para_for_hover {
     position: absolute;

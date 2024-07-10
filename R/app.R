@@ -29,7 +29,7 @@ library(beanplot)
 library(shinycssloaders)
 library(shinyjs)
 library(preprocessCore)
-
+library(dunn.test)
 
 ui <- fluidPage(
   useShinyjs(),
@@ -115,11 +115,14 @@ ui <- fluidPage(
       uiOutput('para_norm'),
       uiOutput('para_transf'),
       uiOutput('para_scale'),
+      uiOutput('tukey_checkbox'),
       #uiOutput('non_parametric_select'),
+      uiOutput('pair_wise_ui'),
       uiOutput('non_para_sort'),
       uiOutput('non_para_norm'),
       uiOutput('non_para_transf'),
       uiOutput('non_para_scale'),
+      uiOutput('non_tukey_checkbox'),
       #uiOutput('checkbox_fdr'),
       uiOutput('corrections_radio'),
       verbatimTextOutput('percent_above_005'),
@@ -174,6 +177,14 @@ ui <- fluidPage(
             top: 0px;
             right: 0px;
             width: 40%;
+        }
+
+        #tukey_hover_container,
+        #dunn_hover_container {
+          position: absolute;
+          top: 360px;
+          right: 0px;
+          width: 40%;
         }
 
         #para_for_hover,
@@ -245,7 +256,8 @@ ui <- fluidPage(
                  withSpinner(div(
                    style = "position:relative",
                    div(id = "para_for_hover", plotOutput('para_data', hover = hoverOpts(id = "para_hover", delay = 50))),
-                   div(id = "hover_para_container", plotOutput("hover_para_hist"))
+                   div(id = "hover_para_container", plotOutput("hover_para_hist")),
+                   div(id = "tukey_hover_container", plotOutput("tukey_results"))
                  ))
                  ),
         tabPanel(id = 'nonpary', 'Non-Parametric tests',
@@ -257,7 +269,8 @@ ui <- fluidPage(
                  withSpinner(div(
                    style = "position:relative",
                    div(id = "non_para_for_hover", plotOutput('non_para_data', hover = hoverOpts(id = "non_para_hover", delay = 50))),
-                   div(id = "hover_non_para_container", plotOutput("hover_non_para_hist"))
+                   div(id = "hover_non_para_container", plotOutput("hover_non_para_hist")),
+                   div(id = "dunn_hover_container", plotOutput("non_tukey_results"))
                  ))
                  ),
         ),
@@ -320,13 +333,31 @@ server <- function(input, output, session) {
 
 
   # File input
+  # output$file_input <- renderUI({
+  #   if (is.null(my_data())) {
+  #     fileInput(
+  #       inputId = "users_path",
+  #       label = "Select data:",
+  #       multiple = FALSE,
+  #       accept = c(".csv", ".xlsx")
+  #     )
+  #   }
+  # })
+
   output$file_input <- renderUI({
     if (is.null(my_data())) {
-      fileInput(
-        inputId = "users_path",
-        label = "Select data:",
-        multiple = FALSE,
-        accept = c(".csv", ".xlsx")
+      tagList(
+        fileInput(
+          inputId = "users_path",
+          label = "Select data:",
+          multiple = FALSE,
+          accept = c(".csv", ".xlsx")
+        ),
+        actionButton(
+          inputId = "load_example_data",
+          label = "Load Example Data"
+        ),
+        hr()
       )
     }
   })
@@ -337,6 +368,16 @@ server <- function(input, output, session) {
     data <- read_my_data(file_path)
     if (!is.null(data)) {
       my_data(data)
+    } else {
+      my_data(NULL)
+    }
+  })
+
+  observeEvent(input$load_example_data, {
+    example_file_path <- system.file("extdata", "example_data.csv", package = "MetaboHelpeR")
+    example_data <- read_my_data(example_file_path)
+    if (!is.null(example_data)) {
+      my_data(example_data)
     } else {
       my_data(NULL)
     }
@@ -3886,6 +3927,20 @@ server <- function(input, output, session) {
     }
   })
 
+
+  observe({
+    if (!is.null(processed_data()) && active_tab() == "Parametric tests" && group_counter() > 2) {
+      output$tukey_checkbox <- renderUI({
+        checkboxInput('tukey_check', 'Tukey HSD Test', value = FALSE)
+      })
+    } else {
+      output$tukey_checkbox <- renderUI({
+        div()
+      })
+    }
+  })
+
+
   observe({
     if (!is.null(processed_data()) && active_tab() == "Parametric tests") {
       output$para_prev_page_button <- renderUI({
@@ -3971,6 +4026,7 @@ server <- function(input, output, session) {
     }
   })
 
+  tukey_results_list_stored <- reactiveVal(NULL)
 
   para_func <- reactive({
     req(processed_data(), para_current_page(), input$para_normalize, input$para_trans, input$para_sca, input$para_sorting)
@@ -4096,8 +4152,23 @@ server <- function(input, output, session) {
     }
 
     results_df <- data.frame(results)
+
     names(results_df)[1] <- "Compound"
     results_df$p_value <- as.numeric(results_df$p_value)
+
+    if (num_groups > 2 && input$tukey_check == TRUE) {
+      tukey_results_list <- list()
+      for (compound in results_df$Compound) {
+        compound_data <- long_data %>% filter(.data[[common_column_value]] == compound)
+        anova_model <- aov(value ~ group, data = compound_data)
+        tukey_result <- TukeyHSD(anova_model)
+
+        tukey_results_list[[compound]] <- tukey_result
+      }
+    } else {
+      tukey_results_list <- list()
+    }
+    tukey_results_list_stored(tukey_results_list)
 
     results_df$Order <- original_order[results_df$Compound]
     results_df <- results_df[order(results_df$Order), ]
@@ -4253,6 +4324,65 @@ server <- function(input, output, session) {
     }
   })
 
+  observe({
+    req(input$tukey_check)
+    if (!is.null(processed_data()) && active_tab() == "Parametric tests" && input$tukey_check == TRUE) {
+      output$tukey_results <- renderPlot({
+        req(tukey_results_list_stored(), input$para_hover, processed_data(), para_data_stored(), para_current_page(), input$para_trans, input$para_normalize, input$para_sca, input$para_sorting)
+
+        extract_tukey_results <- function(tukey_list) {
+          tukey_df <- do.call(rbind, lapply(names(tukey_list), function(compound) {
+            tukey_result <- tukey_list[[compound]]$group
+            tukey_df <- as.data.frame(tukey_result)
+            tukey_df$Comparison <- rownames(tukey_result)
+            tukey_df$Compound <- compound
+            return(tukey_df)
+          }))
+          rownames(tukey_df) <- NULL
+          return(tukey_df)
+        }
+
+        if (is.null(tukey_results_list_stored()) || length(tukey_results_list_stored()) == 0) return()
+
+        tukey_results_df <- extract_tukey_results(tukey_results_list_stored())
+
+        hover <- input$para_hover
+        stat_data <- processed_data()
+        para_data <- para_data_stored()
+        plot_data <- para_data %>%
+          dplyr::select(Compound, 5:ncol(.))
+
+        para_items_per_page <- 50
+        page_offset <- (para_current_page() - 1) * para_items_per_page
+        index_on_page <- para_items_per_page - round(hover$y) + 1
+        index <- page_offset + index_on_page
+        if (index < 1 || index > nrow(para_data)) return()
+
+        hovered_compound <- para_data[index, "Compound"]
+
+        if (nrow(tukey_results_df) == 0) return()
+
+        tukey_results_df <- tukey_results_df %>%
+          dplyr::filter(Compound == hovered_compound)
+
+        if (nrow(tukey_results_df) == 0) return()
+
+        ggplot(tukey_results_df, aes(x = Comparison, y = diff)) +
+          geom_bar(stat = "identity", fill = "skyblue") +
+          geom_text(aes(label = paste("p-value: ", round(`p adj`, 4))), vjust = -0.5) +
+          labs(title = "Tukey HSD Test: Mean Differences Between Groups",
+               x = "Comparison", y = "Mean Difference") +
+          theme_minimal() +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+          expand_limits(y = max(tukey_results_df$diff) * 1.1)
+      })
+    } else if (input$tukey_check == FALSE) {
+      output$tukey_results <- renderUI({
+        div()
+      })
+    }
+  })
+
 
   # Non-parametric test's dropbox & buttons
 
@@ -4348,6 +4478,18 @@ server <- function(input, output, session) {
     }
   })
 
+  observe({
+    if (!is.null(processed_data()) && active_tab() == "Non-Parametric tests" && group_counter() > 2) {
+      output$non_tukey_checkbox <- renderUI({
+        checkboxInput('non_tukey_check', 'Dunn Test', value = FALSE)
+      })
+    } else {
+      output$non_tukey_checkbox <- renderUI({
+        div()
+      })
+    }
+  })
+
   # Non-parametric tests
   non_para_current_page <- reactiveVal(1)
   non_para_items_per_page <- 50
@@ -4390,6 +4532,7 @@ server <- function(input, output, session) {
     }
   })
 
+  non_tukey_results_list_stored <- reactiveVal(NULL)
 
   non_para_func <- reactive({
     req(processed_data(), non_para_current_page(), input$non_para_norm, input$non_para_trans, input$non_para_sca, input$non_para_sorting)
@@ -4518,6 +4661,32 @@ server <- function(input, output, session) {
     results_df <- data.frame(results)
     names(results_df)[1] <- "Compound"
     results_df$p_value <- as.numeric(results_df$p_value)
+
+
+    if (num_groups > 2 && input$non_tukey_check == TRUE) {
+      dunn_results_list <- list()
+      for (compound in results_df$Compound) {
+        compound_data <- long_data %>% filter(.data[[common_column_value]] == compound)
+        kruskal_result <- kruskal.test(value ~ group, data = compound_data)
+
+        #if (kruskal_result$p.value < 0.05) {
+        dunn_result <- dunn.test(compound_data$value, compound_data$group, method = "bonferroni")
+
+        dunn_df <- data.frame(
+          Comparison = paste(dunn_result$comparisons),
+          Z = dunn_result$Z,
+          P.adj = dunn_result$P.adjusted,
+          stringsAsFactors = FALSE
+        )
+
+        dunn_results_list[[compound]] <- dunn_df
+        #}
+      }
+      non_tukey_results_list_stored(dunn_results_list)
+    } else {
+      non_tukey_results_list_stored(list())
+    }
+
 
     results_df$Order <- original_order[results_df$Compound]
     results_df <- results_df[order(results_df$Order), ]
@@ -4674,7 +4843,64 @@ server <- function(input, output, session) {
     }
   })
 
+  extract_dunn_results <- function(dunn_list) {
+    dunn_df <- do.call(rbind, lapply(names(dunn_list), function(compound) {
+      dunn_result <- dunn_list[[compound]]
+      dunn_result$Compound <- compound
+      return(dunn_result)
+    }))
+    rownames(dunn_df) <- NULL
+    return(dunn_df)
+  }
+
+  observe({
+    req(input$non_tukey_check)
+    if (!is.null(processed_data()) && active_tab() == "Non-Parametric tests" && input$non_tukey_check == TRUE) {
+      output$non_tukey_results <- renderPlot({
+        req(non_tukey_results_list_stored(), processed_data(), input$non_para_hover, non_para_data_stored())
+
+        if (is.null(non_tukey_results_list_stored()) || length(non_tukey_results_list_stored()) == 0) return()
+
+        tukey_results_df <- extract_dunn_results(non_tukey_results_list_stored())
+
+        hover <- input$non_para_hover
+        stat_data <- processed_data()
+        non_para_data <- non_para_data_stored()
+        plot_data <- non_para_data %>%
+          dplyr::select(Compound, 5:ncol(.))
+
+        para_items_per_page <- 50
+        page_offset <- (non_para_current_page() - 1) * para_items_per_page
+        index_on_page <- para_items_per_page - round(hover$y) + 1
+        index <- page_offset + index_on_page
+        if (index < 1 || index > nrow(non_para_data)) return()
+
+        hovered_compound <- non_para_data[index, "Compound"]
+
+        if (nrow(tukey_results_df) == 0) return()
+
+        tukey_results_df <- tukey_results_df %>%
+          dplyr::filter(Compound == hovered_compound)
+
+        if (nrow(tukey_results_df) == 0) return()
+
+        ggplot(tukey_results_df, aes(x = Comparison, y = Z)) +
+          geom_bar(stat = "identity", fill = "skyblue") +
+          geom_text(aes(label = paste("p-value: ", round(`P.adj`, 4))), vjust = -0.5) +
+          labs(title = "Dunn Test: Mean Differences Between Groups",
+               x = "Comparison", y = "Mean Difference") +
+          theme_minimal() +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+          expand_limits(y = max(tukey_results_df$Z) * 1.1)
+      })
+    } else if (input$non_tukey_check == FALSE) {
+      output$non_tukey_results <- renderUI({
+        div()
+      })
+    }
+  })
+
+
 }
-# shinyApp(ui = ui, server = server)
-shinyApp(ui = ui, server = server, ...)
+shinyApp(ui = ui, server = server)
 }
