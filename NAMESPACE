@@ -1,1 +1,2 @@
 exportPattern("^[[:alpha:]]+")
+export(MetaboHelpeR_launch)
