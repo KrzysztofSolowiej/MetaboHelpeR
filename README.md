@@ -18,10 +18,8 @@ In this case, please restart *R* and try:
 remove.packages("MetaboHelpeR")
 remotes::install_github("KrzysztofSolowiej/MetaboHelpeR", repos = BiocManager::repositories())
 ```
-Always read error messages.
-
 After successful installation you can run *MetaboHelpeR* app by typing the following commands into an *R* console.
 ``` r
 library(MetaboHelpeR)
-MetaboHelpeR()
+MetaboHelpeR_launch()
 ```
