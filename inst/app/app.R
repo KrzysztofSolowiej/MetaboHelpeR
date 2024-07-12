@@ -116,6 +116,7 @@ ui <- fluidPage(
       uiOutput('para_transf'),
       uiOutput('para_scale'),
       uiOutput('tukey_checkbox'),
+      uiOutput('tukey_download'),
       #uiOutput('non_parametric_select'),
       uiOutput('pair_wise_ui'),
       uiOutput('non_para_sort'),
@@ -123,6 +124,7 @@ ui <- fluidPage(
       uiOutput('non_para_transf'),
       uiOutput('non_para_scale'),
       uiOutput('non_tukey_checkbox'),
+      uiOutput('dunn_download'),
       #uiOutput('checkbox_fdr'),
       uiOutput('corrections_radio'),
       verbatimTextOutput('percent_above_005'),
@@ -177,6 +179,13 @@ ui <- fluidPage(
             top: 0px;
             right: 0px;
             width: 40%;
+        }
+
+        #tukey_table_container {
+            position: absolute;
+            top: 760px;
+            right: 0px;
+            width: 100%;
         }
 
         #tukey_hover_container,
@@ -257,7 +266,8 @@ ui <- fluidPage(
                    style = "position:relative",
                    div(id = "para_for_hover", plotOutput('para_data', hover = hoverOpts(id = "para_hover", delay = 50))),
                    div(id = "hover_para_container", plotOutput("hover_para_hist")),
-                   div(id = "tukey_hover_container", plotOutput("tukey_results"))
+                   div(id = "tukey_hover_container", plotOutput("tukey_results")),
+                   div(id = "tukey_table_container", DT::DTOutput('tukey_results_table'))
                  ))
                  ),
         tabPanel(id = 'nonpary', 'Non-Parametric tests',
@@ -4027,6 +4037,32 @@ server <- function(input, output, session) {
   })
 
   tukey_results_list_stored <- reactiveVal(NULL)
+  tukey_results_df_download <- reactiveVal(NULL)
+  tukey_summary_df_download <- reactiveVal(NULL)
+
+  observe({
+    if (!is.null(processed_data()) && !is.null(tukey_results_df_download()) && active_tab() == "Parametric tests" && input$tukey_check == TRUE) {
+      output$tukey_download <- renderUI({
+        tagList(
+          tags$p("Download Tukey test results"),
+          downloadHandler(
+            filename = function() {
+              current_datetime <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+              paste0("tukey_results_", current_datetime, ".csv")
+            },
+            content = function(file) {
+              write.csv(tukey_results_df_download(), file)
+            }
+          ),
+          br())
+      })
+    } else {
+      output$tukey_download <- renderUI({
+        div()
+      })
+    }
+  })
+
 
   para_func <- reactive({
     req(processed_data(), para_current_page(), input$para_normalize, input$para_trans, input$para_sca, input$para_sorting)
@@ -4156,19 +4192,53 @@ server <- function(input, output, session) {
     names(results_df)[1] <- "Compound"
     results_df$p_value <- as.numeric(results_df$p_value)
 
+    process_tukey_results <- function(tukey_results_list) {
+      results <- lapply(names(tukey_results_list), function(compound) {
+        result <- tukey_results_list[[compound]]$group
+        result_df <- as.data.frame(result)
+        result_df$Comparison <- rownames(result_df)
+        result_df$Compound <- compound
+        return(result_df)
+      })
+      combined_results <- bind_rows(results)
+      return(combined_results)
+    }
+
     if (num_groups > 2 && input$tukey_check == TRUE) {
       tukey_results_list <- list()
       for (compound in results_df$Compound) {
         compound_data <- long_data %>% filter(.data[[common_column_value]] == compound)
         anova_model <- aov(value ~ group, data = compound_data)
         tukey_result <- TukeyHSD(anova_model)
-
         tukey_results_list[[compound]] <- tukey_result
       }
+
+    tukey_results_df <- process_tukey_results(tukey_results_list)
+    rownames(tukey_results_df) <- NULL
+
+    tukey_results_df <- tukey_results_df %>%
+      select(Compound, diff, lwr, upr, `p adj`, Comparison)
+
+    tukey_results_df_download(tukey_results_df)
+
+      tukey_summary_df <- tukey_results_df %>%
+        group_by(Comparison) %>%
+        summarise(
+          count_significant_p_adj = sum(`p adj` < 0.05),
+          percent_p_adj_below_0_05 = mean(`p adj` < 0.05) * 100,
+          mean_diff = mean(diff),
+          mean_lwr = mean(lwr),
+          mean_upr = mean(upr),
+          mean_p_adj = mean(`p adj`)
+        )
+
+    tukey_summary_df_download(tukey_summary_df)
     } else {
       tukey_results_list <- list()
     }
+
     tukey_results_list_stored(tukey_results_list)
+
 
     results_df$Order <- original_order[results_df$Compound]
     results_df <- results_df[order(results_df$Order), ]
@@ -4323,6 +4393,16 @@ server <- function(input, output, session) {
       })
     }
   })
+
+
+    output$tukey_results_table <- DT::renderDT({
+      req(tukey_summary_df_download(), input$tukey_check)
+        DT::datatable(
+          tukey_summary_df_download(),
+          options = list(pageLength = 10, scrollX = TRUE))
+      })
+
+
 
   observe({
     req(input$tukey_check)
@@ -4508,7 +4588,6 @@ server <- function(input, output, session) {
 
   non_para_data_stored <- reactiveVal(NULL)
 
-
   observe({
     if (!is.null(non_para_data_stored()) && active_tab() == "Non-Parametric tests") {
       output$non_para_download <- renderUI({
@@ -4533,6 +4612,30 @@ server <- function(input, output, session) {
   })
 
   non_tukey_results_list_stored <- reactiveVal(NULL)
+
+  observe({
+    if (!is.null(processed_data()) && !is.null(non_tukey_results_list_stored()) && active_tab() == "Non-Parametric tests" && input$non_tukey_check == TRUE) {
+      output$dunn_download <- renderUI({
+        tagList(
+          tags$p("Download Dunn test results"),
+          downloadHandler(
+            filename = function() {
+              current_datetime <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+              paste0("dunn_results_", current_datetime, ".csv")
+            },
+            content = function(file) {
+              write.csv(non_tukey_results_list_stored(), file)
+            }
+          ),
+          br())
+      })
+    } else {
+      output$dunn_download <- renderUI({
+        div()
+      })
+    }
+  })
+
 
   non_para_func <- reactive({
     req(processed_data(), non_para_current_page(), input$non_para_norm, input$non_para_trans, input$non_para_sca, input$non_para_sorting)
