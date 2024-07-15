@@ -1638,7 +1638,8 @@ server <- function(input, output, session) {
         }
       }
     }
-    new_data_df
+    new_data_df[, -1] <- lapply(new_data_df[, -1], as.numeric)
+    return(new_data_df)
   })
 
   coefficient_of_variance <- function(x) {
@@ -3280,6 +3281,7 @@ server <- function(input, output, session) {
       }
 
       add_first_column_list <- function(df, first_column, prefix) {
+        df <- as.data.frame(df)
         df[, 1] <- paste0(prefix, "_", first_column)
         return(df)
       }
@@ -3309,6 +3311,14 @@ server <- function(input, output, session) {
 
         ss <- unique(group_names)
         splitted <- lapply(setNames(ss, ss), function(x) dat[, grep(x, colnames(dat))])
+
+        # Convert each element of `splitted` to data frame explicitly
+        splitted <- lapply(splitted, function(x) {
+          if (!is.data.frame(x)) {
+            x <- as.data.frame(x)
+          }
+          return(x)
+        })
 
         splitted <- lapply(splitted, add_first_column, stat_data[, 1])
 
@@ -3399,8 +3409,23 @@ server <- function(input, output, session) {
         group_names <- get_group_info(names(stat_data)[-1])
         ss <- unique(group_names)
         splitted <- lapply(setNames(ss, ss), function(x) stat_data[, grep(x, colnames(stat_data))])
+
         splitted <- lapply(splitted, add_first_column, stat_data[, 1])
-        splitted <- mapply(add_first_column_list, splitted, stat_data[, 1], names(splitted))
+
+        splitted <- lapply(splitted, function(x) {
+          if (!is.data.frame(x)) {
+            x <- as.data.frame(x)
+          }
+          return(x)
+        })
+
+        #splitted <- mapply(add_first_column_list, splitted, stat_data[, 1], names(splitted))
+
+        splitted <- mapply(function(df, prefix) {
+          df[, 1] <- paste0(prefix, "_", df[, 1])
+          return(df)
+        }, splitted, names(splitted), SIMPLIFY = FALSE)
+
         combined_df <- bind_rows(splitted, .id = "group_name")
         stat_data <- combined_df[,-1]
         joined_data <- left_join(results_df, stat_data, by = c("Compound" = common_column_value))
