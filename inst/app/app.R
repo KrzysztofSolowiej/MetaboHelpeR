@@ -181,7 +181,8 @@ ui <- fluidPage(
             width: 40%;
         }
 
-        #tukey_table_container {
+        #tukey_table_container,
+        #dunn_table_container {
             position: absolute;
             top: 760px;
             right: 0px;
@@ -280,7 +281,8 @@ ui <- fluidPage(
                    style = "position:relative",
                    div(id = "non_para_for_hover", plotOutput('non_para_data', hover = hoverOpts(id = "non_para_hover", delay = 50))),
                    div(id = "hover_non_para_container", plotOutput("hover_non_para_hist")),
-                   div(id = "dunn_hover_container", plotOutput("non_tukey_results"))
+                   div(id = "dunn_hover_container", plotOutput("non_tukey_results")),
+                   div(id = "dunn_table_container", DT::DTOutput('dunn_results_table'))
                  ))
                  ),
         ),
@@ -4612,9 +4614,11 @@ server <- function(input, output, session) {
   })
 
   non_tukey_results_list_stored <- reactiveVal(NULL)
+  dunn_results_df_download <- reactiveVal(NULL)
+  dunn_summary_df_download <- reactiveVal(NULL)
 
   observe({
-    if (!is.null(processed_data()) && !is.null(non_tukey_results_list_stored()) && active_tab() == "Non-Parametric tests" && input$non_tukey_check == TRUE) {
+    if (!is.null(processed_data()) && !is.null(dunn_results_df_download()) && active_tab() == "Non-Parametric tests" && input$non_tukey_check == TRUE) {
       output$dunn_download <- renderUI({
         tagList(
           tags$p("Download Dunn test results"),
@@ -4624,7 +4628,7 @@ server <- function(input, output, session) {
               paste0("dunn_results_", current_datetime, ".csv")
             },
             content = function(file) {
-              write.csv(non_tukey_results_list_stored(), file)
+              write.csv(dunn_results_df_download(), file)
             }
           ),
           br())
@@ -4765,27 +4769,45 @@ server <- function(input, output, session) {
     names(results_df)[1] <- "Compound"
     results_df$p_value <- as.numeric(results_df$p_value)
 
-
     if (num_groups > 2 && input$non_tukey_check == TRUE) {
       dunn_results_list <- list()
+
       for (compound in results_df$Compound) {
         compound_data <- long_data %>% filter(.data[[common_column_value]] == compound)
         kruskal_result <- kruskal.test(value ~ group, data = compound_data)
-
-        #if (kruskal_result$p.value < 0.05) {
         dunn_result <- dunn.test(compound_data$value, compound_data$group, method = "bonferroni")
 
         dunn_df <- data.frame(
           Comparison = paste(dunn_result$comparisons),
           Z = dunn_result$Z,
           P.adj = dunn_result$P.adjusted,
+          Compound = compound,
           stringsAsFactors = FALSE
         )
 
         dunn_results_list[[compound]] <- dunn_df
-        #}
       }
+
+      combined_dunn_df <- do.call(rbind, dunn_results_list)
+
+      combined_dunn_df$Comparison <- as.character(combined_dunn_df$Comparison)
+      combined_dunn_df$P.adj <- as.numeric(combined_dunn_df$P.adj)
+      combined_dunn_df$Z <- as.numeric(combined_dunn_df$Z)
+      combined_dunn_df$Compound <- as.character(combined_dunn_df$Compound)
+
+      dunn_summary_df <- combined_dunn_df %>%
+        group_by(Comparison) %>%
+        summarise(
+          count_significant_p_adj = sum(P.adj < 0.05),
+          percent_p_adj_below_0_05 = mean(P.adj < 0.05) * 100,
+          mean_Z = mean(Z),
+          mean_p_adj = mean(P.adj)
+        )
+
+      dunn_summary_df_download(dunn_summary_df)
+      dunn_results_df_download(combined_dunn_df)
       non_tukey_results_list_stored(dunn_results_list)
+
     } else {
       non_tukey_results_list_stored(list())
     }
@@ -4955,6 +4977,13 @@ server <- function(input, output, session) {
     rownames(dunn_df) <- NULL
     return(dunn_df)
   }
+
+  output$dunn_results_table <- DT::renderDT({
+    req(dunn_summary_df_download(), input$non_tukey_check)
+    DT::datatable(
+      dunn_summary_df_download(),
+      options = list(pageLength = 10, scrollX = TRUE))
+  })
 
   observe({
     req(input$non_tukey_check)
