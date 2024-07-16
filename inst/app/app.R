@@ -874,7 +874,7 @@ server <- function(input, output, session) {
 
   # Render nudge selector
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "% of change", "Fold change", "Grubbs test", "Outlier detection")) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Outlier detection")) {
       output$nudge_selector <- renderUI({
         sliderInput(
           'nudge_value', 'Adjust position',
@@ -2036,7 +2036,6 @@ server <- function(input, output, session) {
     req(processed_data())
     common_column_value <- common_column()
     height_value <- input$height_value
-    nudge_value <- input$nudge_value
     scale_check <- input$checkbox_scale_value
     real_data_merged <- processed_data()
 
@@ -2105,7 +2104,7 @@ server <- function(input, output, session) {
         geom_bar(stat = "identity", position = "dodge") +
         geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
         geom_text(aes(label = sprintf("%.1f", PercentChange),
-                      y = ifelse(PercentChange >= 0, PercentChange - (nudge_value*4), PercentChange + (nudge_value*4))),
+                      y = PercentChange),
                   position = position_dodge(width = 0.9), vjust = 0, size = 3) +
         labs(x = "Compound", y = "Percent Change") +
         ggtitle(title_value()) +
@@ -2139,7 +2138,6 @@ server <- function(input, output, session) {
     req(processed_data())
     common_column_value <- common_column()
     height_value <- input$height_value
-    nudge_value <- input$nudge_value
     scale_check <- input$checkbox_scale_value
     log_check <- input$checkbox_fold2log
     real_data_merged <- processed_data()
@@ -2188,15 +2186,16 @@ server <- function(input, output, session) {
 
       plot <- ggplot(fold_change_data, aes(x = ordered_compound_names, y = fold_change, fill = group)) +
         geom_bar(stat = "identity", position = "dodge") +
-        geom_text(aes(label = round(fold_change, 2)), vjust = 0, size = 3) +
+        geom_text(aes(label = round(fold_change, 2)), vjust = -0.5, size = 3) +
         labs(x = common_column_value, y = if (log_check == FALSE) "Fold change" else "Log2 fold change") +
-        coord_flip()
+        coord_flip() +
+        expand_limits(y = 0)
       ggplotly(plot, height = height_value)
     } else {
         plot <- ggplot(gather(fold_change_data, key = "Group", value = "FoldChange", -.data[[common_column()]], -control_mean),
            aes(x = .data[[common_column()]], y = FoldChange)) +
           geom_bar(stat = "identity", position = "dodge") +
-          geom_text(aes(label = round(FoldChange, 2), y = FoldChange + abs(nudge_value/4)),
+          geom_text(aes(label = round(FoldChange, 2), y = FoldChange),
                 position = position_dodge(width = 0.9), vjust = 0, size = 3) +
           labs(x = common_column_value, y = if (log_check == FALSE) "Fold change" else "Log2 fold change") +
           ggtitle(title_value()) +
