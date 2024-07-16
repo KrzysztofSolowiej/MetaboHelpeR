@@ -9,6 +9,9 @@ To install the *MetaboHelpeR* package, please use the following commands in *R* 
 if (!requireNamespace("remotes", quietly = TRUE)) {
   install.packages("remotes")
 }
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
 
 remotes::install_github("KrzysztofSolowiej/MetaboHelpeR", repos = BiocManager::repositories())
 ```

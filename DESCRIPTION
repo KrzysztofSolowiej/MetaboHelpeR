@@ -25,6 +25,7 @@ Imports:
     dplyr,
     data.table,
     purrr,
+    DT,
     ggplot2,
     ggrepel,
     ggbeeswarm,
