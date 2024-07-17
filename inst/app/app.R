@@ -70,10 +70,12 @@ ui <- fluidPage(
       uiOutput('nudge_selector'),
       uiOutput('mean_point'),
       uiOutput('color_blind'),
+      uiOutput('perc_fold_dropdown'),
       uiOutput('ranges_crit_type'),
       uiOutput('range_seed_setter'),
       uiOutput('range_tree_setter'),
       uiOutput('checkbox_scale_y'),
+      uiOutput('checkbox_scale_y_2'),
       uiOutput('checkbox_log2'),
       uiOutput('dropdown_type'),
       uiOutput('dist_xlab'),
@@ -217,22 +219,21 @@ ui <- fluidPage(
         tabPanel(id = 'rangy', 'Ranges',
                  withSpinner(plotly::plotlyOutput('plot_data'))),
                  #DT::DTOutput('plot_data')),
-        tabPanel(id = 'changey', '% of change',
+        tabPanel(id = 'changey', '%/fold change',
                  withSpinner(plotly::plotlyOutput('change_data'))),
               #   DT::DTOutput('change_data')),
-        tabPanel(id = "foldy", 'Fold change',
-                # DT::DTOutput('fold_data')),
-                withSpinner(plotly::plotlyOutput('fold_data'))),
-        tabPanel(id = 'disty', 'Distribution plots',
+        # tabPanel(id = "foldy", 'Fold change',
+        #         withSpinner(plotly::plotlyOutput('fold_data'))),
+        tabPanel(id = 'disty', 'Other plots',
                  withSpinner(plotly::plotlyOutput('dist_data'))),
-        tabPanel(id = 'pca', 'Outlier detection',
+        tabPanel(id = 'pca', 'Outliers',
                 #DT::DTOutput('pca_data')
                 div(style = "height: 550px; overflow-y: scroll;",
                     withSpinner(plotly::plotlyOutput('pca_data'))),
                 hr(),
                 plotOutput('outliers_table')
                 ),
-        tabPanel(id = 'gini', 'RF Gini index',
+        tabPanel(id = 'gini', 'RF Gini',
                  withSpinner(plotly::plotlyOutput('gini_data')),
                  DT::DTOutput("conf_matrix"),
                  DT::DTOutput("mean_dec_acc"),
@@ -247,7 +248,7 @@ ui <- fluidPage(
                    div(id = "hover_histogram_container", plotOutput("hover_histogram"))
                  )
                  ),
-        tabPanel(id = 'leve', 'Homoscedasticity',
+        tabPanel(id = 'leve', 'Variance',
                  uiOutput("leve_prev_page_button"),
                  uiOutput("leve_next_page_button"),
                  uiOutput("leve_page_info_text"),
@@ -837,7 +838,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "% of change", "Fold change", "Distribution plots", "Grubbs test", "Outlier detection")) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "%/fold change", "Fold change", "Other plots", "Grubbs test", "Outliers")) {
       output$custom_title <- renderUI({
         tagList(
           hr(),
@@ -857,7 +858,7 @@ server <- function(input, output, session) {
 
   # Render plot height slider
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "% of change", "Fold change", "Distribution plots", "Grubbs test")) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "%/fold change", "Fold change", "Other plots", "Grubbs test")) {
       output$plot_height <- renderUI({
         sliderInput(
           'height_value', 'Adjust plot height',
@@ -874,7 +875,7 @@ server <- function(input, output, session) {
 
   # Render nudge selector
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Outlier detection")) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Outliers")) {
       output$nudge_selector <- renderUI({
         sliderInput(
           'nudge_value', 'Adjust position',
@@ -890,7 +891,7 @@ server <- function(input, output, session) {
 
   # Render distplot x lab slider
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Distribution plots") {
+    if (!is.null(processed_data()) && active_tab() == "Other plots") {
       output$dist_xlab <- renderUI({
         sliderInput(
           'xlab_value', 'Adjust x lab position',
@@ -906,7 +907,7 @@ server <- function(input, output, session) {
 
   # Render distplot y lab slider
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("% of change", "Distribution plots")) {
+    if (!is.null(processed_data()) && active_tab() %in% c("%/fold change", "Other plots")) {
       output$dist_ylab <- renderUI({
         sliderInput(
           'ylab_value', 'Adjust y lab position',
@@ -948,9 +949,9 @@ server <- function(input, output, session) {
 
   #  Render ranges criterium dropdown
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Distribution plots") && nrow(processed_data()) > 30) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Other plots") && nrow(processed_data()) > 30) {
       output$ranges_crit_type <- renderUI({
-        selectInput("top_ranges_crit", "Select top ranges criterium:", c("Top MAX/MIN Amplitude", "Statistically significant (parametric)", "Statistically significant (non-parametric)", "Top RF Gini Index"))
+        selectInput("top_ranges_crit", "Select top ranges criterium:", c("Top MAX/MIN Amplitude", "Statistically significant (parametric)", "Statistically significant (non-parametric)", "Top RF Gini"))
       })
     } else {
       output$ranges_crit_type <- renderUI({
@@ -959,9 +960,22 @@ server <- function(input, output, session) {
     }
   })
 
+  #  Render %/fold dropdown
+  observe({
+    if (!is.null(processed_data()) && active_tab() == "%/fold change") {
+      output$perc_fold_dropdown <- renderUI({
+        selectInput("perc_fold_type", "Quantity measurement:", c("Fold change", "Percent"))
+      })
+    } else {
+      output$perc_fold_dropdown <- renderUI({
+        div()
+      })
+    }
+  })
+
  # Render scale checkbox
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("% of change", "Fold change", "Distribution plots")) {
+    if (!is.null(processed_data()) && active_tab() == "%/fold change" && nrow(processed_data()) < 25) {
       output$checkbox_scale_y <- renderUI({
         checkboxInput('checkbox_scale_value', 'Fixed scale', value = FALSE)
       })
@@ -972,9 +986,23 @@ server <- function(input, output, session) {
     }
   })
 
+  # Render scale checkbox 2
+  observe({
+    if (!is.null(processed_data()) && active_tab() == "Other plots") {
+      output$checkbox_scale_y_2 <- renderUI({
+        checkboxInput('checkbox_scale_value_2', 'Fixed scale', value = FALSE)
+      })
+    } else {
+      output$checkbox_scale_y_2 <- renderUI({
+        div()
+      })
+    }
+  })
+
   #  Render log checkbox
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Fold change") {
+    req(input$perc_fold_type)
+    if (!is.null(processed_data()) && active_tab() == "%/fold change" && input$perc_fold_type == "Fold change") {
       output$checkbox_log2 <- renderUI({
         checkboxInput('checkbox_fold2log', 'Log2 fold', value = FALSE)
       })
@@ -987,7 +1015,7 @@ server <- function(input, output, session) {
 
   #  Render distplot dropdown
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Distribution plots") {
+    if (!is.null(processed_data()) && active_tab() == "Other plots") {
       output$dropdown_type <- renderUI({
         selectInput("dist_plot_type", "Type of distribution plot:", c("Box", "Violin", "Smooth"))
       })
@@ -998,36 +1026,10 @@ server <- function(input, output, session) {
     }
   })
 
-  # Render Grubbs transform check
-  observe({
-    if (!is.null(processed_data()) && active_tab() == "Grubbs test") {
-      output$grubbs_scale <- renderUI({
-        selectInput("checkbox_scale", "Select type of transformation:", c("None", "sqrt normalization", "log normalization", "Yeo-Johnson", "Ordered Quantile normalization"))
-        #checkboxInput('checkbox_scale', 'Perform Yeo-Johnson transformation', value = FALSE)
-      })
-    } else {
-      output$grubbs_scale <- renderUI({
-        div()
-      })
-    }
-  })
-
-  # Render Grubbs test dropdown
-  observe({
-    if (!is.null(processed_data()) && active_tab() == "Grubbs test") {
-      output$grubbs_drop <- renderUI({
-        selectInput("test_type_dropdown", "Select Grubbs test type:", c("Max", "Second Max", "Third Max", "Fourth Max", "Fifth Max", "Min"))
-      })
-    } else {
-      output$grubbs_drop <- renderUI({
-        div()
-      })
-    }
-  })
 
   # Render PCA search dropdown
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection") {
+    if (!is.null(processed_data()) && active_tab() == "Outliers") {
       options <- if (nrow(processed_data()) < 30) {
         c("Row", "Column")
       } else {
@@ -1046,7 +1048,7 @@ server <- function(input, output, session) {
 
   # Render detection method
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection") {
+    if (!is.null(processed_data()) && active_tab() == "Outliers") {
       output$pca_method_drop <- renderUI({
         selectInput("method_dropdown", "Method:", c("PCA", "PLS"))
       })
@@ -1059,7 +1061,7 @@ server <- function(input, output, session) {
 
   # Render PCA distance
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection") {
+    if (!is.null(processed_data()) && active_tab() == "Outliers") {
       output$pca_dist_drop <- renderUI({
         selectInput("distance_dropdown", "Statistic:", c("Euclidean distance", "Mahalanobis distance", "Hotelling T2"))
       })
@@ -1073,7 +1075,7 @@ server <- function(input, output, session) {
   # Render points of interest
   observe({
     req(input$pca_dropdown)
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection" && input$pca_dropdown == "Row") {
+    if (!is.null(processed_data()) && active_tab() == "Outliers" && input$pca_dropdown == "Row") {
       output$pca_interest_check <- renderUI({
         div(
           style = "display: flex; align-items: start;",
@@ -1095,7 +1097,7 @@ server <- function(input, output, session) {
 
   # Render PCA criterion dropdown
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection") {
+    if (!is.null(processed_data()) && active_tab() == "Outliers") {
       output$pca_criterion_drop <- renderUI({
         selectInput("criterion_dropdown", "Define outlier criterion:", c("Quantile", "Mean + Sd"))
       })
@@ -1109,11 +1111,11 @@ server <- function(input, output, session) {
   # Render quantile threshold
   observe({
     req(input$criterion_dropdown)
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection" && input$criterion_dropdown == "Quantile" && nrow(processed_data()) < 30) {
+    if (!is.null(processed_data()) && active_tab() == "Outliers" && input$criterion_dropdown == "Quantile" && nrow(processed_data()) < 30) {
       output$quant_val <- renderUI({
         numericInput("quant", "Quantile threshold:", 0.95, min = 0.9, max = 0.99, step = 0.01)
       })
-    } else if (!is.null(processed_data()) && active_tab() == "Outlier detection" && input$criterion_dropdown == "Quantile" && nrow(processed_data()) >= 30) {
+    } else if (!is.null(processed_data()) && active_tab() == "Outliers" && input$criterion_dropdown == "Quantile" && nrow(processed_data()) >= 30) {
       output$quant_val <- renderUI({
         numericInput("quant", "Quantile threshold:", 0.99, min = 0.9, max = 0.999, step = 0.001)
       })
@@ -1127,7 +1129,7 @@ server <- function(input, output, session) {
   # Render sd multiplier
   observe({
     req(input$criterion_dropdown)
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection" && input$criterion_dropdown == "Mean + Sd") {
+    if (!is.null(processed_data()) && active_tab() == "Outliers" && input$criterion_dropdown == "Mean + Sd") {
       output$sd_val <- renderUI({
         numericInput("sd_n", "Sd multiplier:", 6, min = 2, max = 10)
       })
@@ -1154,7 +1156,7 @@ server <- function(input, output, session) {
 
   # Render top compound selector for Ranges and Distplot
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Distribution plots") && nrow(processed_data()) > 30) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Other plots") && nrow(processed_data()) > 30) {
       output$top_compound_real_selector <- renderUI({
         checkboxGroupInput(
           'top_compound_range', 'Select compound',
@@ -1172,7 +1174,7 @@ server <- function(input, output, session) {
 
   # Render top compounds sorter for Ranges and Distplot
   observe({
-    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Distribution plots") && nrow(processed_data()) > 30) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Ranges", "Other plots") && nrow(processed_data()) > 30) {
       output$top_compounds_selector <- renderUI({
         compound_choices <- top_compounds_reactive()
         if (length(compound_choices) > 0) {
@@ -1194,7 +1196,7 @@ server <- function(input, output, session) {
 
   # Render compound selector
   output$compound_selector <- renderUI({
-    if (!is.null(processed_data()) && active_tab() %in% c("Table", "Ranges", "% of change", "Fold change", "Distribution plots")) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Table", "Ranges", "%/fold change", "Fold change", "Other plots")) {
       checkboxGroupInput(
         'compound_range', 'Select compound',
         choices = unique(processed_data()[[common_column()]]),
@@ -1209,7 +1211,7 @@ server <- function(input, output, session) {
 
   # Render compound sorter
   output$compound_sorter <- renderUI({
-    if (!is.null(processed_data()) && active_tab() %in% c("Table", "Ranges", "% of change", "Fold change", "Distribution plots")) {
+    if (!is.null(processed_data()) && active_tab() %in% c("Table", "Ranges", "%/fold change", "Fold change", "Other plots")) {
       selected_compounds <- processed_data()[[common_column()]]
       selected_compounds <- selected_compounds[selected_compounds %in% input$compound_range]
 
@@ -1228,7 +1230,7 @@ server <- function(input, output, session) {
   # Render pca compound selector
   observe({
   req(input$pca_dropdown)
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection" && input$pca_dropdown == "Row" && nrow(processed_data()) < 30) {
+    if (!is.null(processed_data()) && active_tab() == "Outliers" && input$pca_dropdown == "Row" && nrow(processed_data()) < 30) {
       output$pca_compound_selector <- renderUI({
         checkboxGroupInput(
           'pca_compound_range', 'Select compound',
@@ -1246,7 +1248,7 @@ server <- function(input, output, session) {
   # Render sample selector
   observe({
   req(input$pca_dropdown)
-    if (!is.null(processed_data()) && active_tab() == "Outlier detection" && input$pca_dropdown == "Column" && nrow(processed_data()) < 30) {
+    if (!is.null(processed_data()) && active_tab() == "Outliers" && input$pca_dropdown == "Column" && nrow(processed_data()) < 30) {
       output$sample_selector <- renderUI({
         checkboxGroupInput(
           'pca_sample_range', 'Select sample',
@@ -1264,7 +1266,7 @@ server <- function(input, output, session) {
   # Render range seed setter
   observe({
     req(input$top_ranges_crit)
-    if (!is.null(processed_data()) && active_tab() == "Ranges" && input$top_ranges_crit == "Top RF Gini Index") {
+    if (!is.null(processed_data()) && active_tab() == "Ranges" && input$top_ranges_crit == "Top RF Gini") {
       output$range_seed_setter <- renderUI({
         numericInput("range_set_seed", "Set seed:", 1, min = 1, max = 10000, step = 1)
       })
@@ -1277,7 +1279,7 @@ server <- function(input, output, session) {
 
   # Render seed setter
   observe({
-    if (!is.null(processed_data()) && active_tab() == "RF Gini index") {
+    if (!is.null(processed_data()) && active_tab() == "RF Gini") {
       output$seed_setter <- renderUI({
         numericInput("set_seed", "Set seed:", 1, min = 1, max = 10000, step = 1)
       })
@@ -1292,7 +1294,7 @@ server <- function(input, output, session) {
   # Render range num of tree input
   observe({
     req(input$top_ranges_crit)
-    if (!is.null(processed_data()) && active_tab() == "Ranges" && input$top_ranges_crit == "Top RF Gini Index") {
+    if (!is.null(processed_data()) && active_tab() == "Ranges" && input$top_ranges_crit == "Top RF Gini") {
       output$range_tree_setter <- renderUI({
         numericInput("range_tree_num", "Number of trees:", 2000, min = 100, max = 10000, step = 100)
       })
@@ -1305,7 +1307,7 @@ server <- function(input, output, session) {
 
   # Render num of tree input
   observe({
-    if (!is.null(processed_data()) && active_tab()  == "RF Gini index") {
+    if (!is.null(processed_data()) && active_tab()  == "RF Gini") {
       output$tree_setter <- renderUI({
         numericInput("tree_num", "Number of trees:", 2000, min = 100, max = 10000, step = 100)
       })
@@ -1455,7 +1457,7 @@ server <- function(input, output, session) {
   # })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$homo_sort <- renderUI({
         selectInput("homoscedas_sort", "Sort data:", c("None", "Min", "Max"))
       })
@@ -1467,7 +1469,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$homo_norm <- renderUI({
         selectInput("homoscedas_norm", "Normalize data:", c("None", "by Sum", "by Median", "Quantile"))
       })
@@ -1479,7 +1481,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$homo_transf <- renderUI({
         selectInput("homoscedas_trans", "Transform data:", c("None", "Log(5)", "Log(10)", "Square root", "Cube root", "Square", "Cube"))
       })
@@ -1491,7 +1493,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$homo_scale <- renderUI({
         selectInput("homoscedas_scale", "Scale data:", c("None", "Center on Mean", "Auto"))
       })
@@ -1503,7 +1505,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$checkbox_swarm <- renderUI({
         checkboxInput('swarm_check', 'Bean/Beeswarm Plot', value = FALSE)
       })
@@ -1907,7 +1909,7 @@ server <- function(input, output, session) {
           select(-c(2))
         colnames(top_compounds)[1] = common_column_value
 
-      } else if (top_criterium == "Top RF Gini Index") {
+      } else if (top_criterium == "Top RF Gini") {
         gini_data <- processed_data()
         new_row <- rep(NA, ncol(gini_data))
         for (i in 2:ncol(gini_data)) {
@@ -2031,12 +2033,14 @@ server <- function(input, output, session) {
     plot_lineranges()
   })
 
-  # Render % of change plot
+  # Render %/fold change plot
   plot_changes <- reactive({
     req(processed_data())
     common_column_value <- common_column()
     height_value <- input$height_value
+    perc_fold_value <- input$perc_fold_type
     scale_check <- input$checkbox_scale_value
+    log_check <- input$checkbox_fold2log
     real_data_merged <- processed_data()
 
     long_data <- real_data_merged %>%
@@ -2048,7 +2052,7 @@ server <- function(input, output, session) {
         avg_value = mean(value, na.rm = TRUE)
       )
 
-    if(nrow(real_data_merged) < 30) {
+    if(nrow(real_data_merged) < 25) {
       summary_data <- summary_data %>%
         filter(.data[[common_column()]] %in% input$compound_range)
     }
@@ -2060,71 +2064,113 @@ server <- function(input, output, session) {
       suffixes = c("_control", "_test")
     ) %>%
       mutate(
-        percent_change = ((avg_value_test - avg_value_control) / avg_value_control) * 100
+        control_mean = avg_value_control,
+        percent_change = ((avg_value_test - avg_value_control) / avg_value_control) * 100,
+        fold_change = if (log_check == FALSE) abs(foldchange(avg_value_control, avg_value_test)) else foldchange2logratio(abs(foldchange(avg_value_control, avg_value_test)))
       ) %>%
-      mutate(
-        control_mean = avg_value_control
-      ) %>%
-      select(.data[[common_column()]], control_mean, group, percent_change)
+      select(.data[[common_column()]], control_mean, group, percent_change, fold_change)
 
     percent_change_data <- percent_change_data[percent_change_data$control_mean != 0, ]
 
-    if (nrow(real_data_merged) > 25) {
+    if (nrow(real_data_merged) >= 25) {
+      if (perc_fold_value == 'Percent') {
+        # Sort the data within each group separately to get highest and lowest values
+        percent_change_data <- percent_change_data %>%
+          group_by(group) %>%
+          arrange(desc(percent_change)) %>%
+          slice(c(1:25, (n() - 24):n())) %>%
+          ungroup()
 
-      # Sort the data within each group separately to get highest and lowest values
-      percent_change_data <- percent_change_data %>%
-        group_by(group) %>%
-        arrange(desc(percent_change)) %>%
-        slice(c(1:25, (n() - 24):n())) %>%
-        ungroup()
+        percent_change_data <- percent_change_data %>%
+          mutate(ordered_compound_names = reorder(!!sym(common_column()), percent_change))
 
-      percent_change_data <- percent_change_data %>%
-        mutate(ordered_compound_names = reorder(!!sym(common_column()), percent_change))
+        plot <- ggplot(percent_change_data, aes(x = ordered_compound_names, y = percent_change)) +
+          geom_bar(stat = "identity", position = "dodge") +
+          labs(x = "Compound", y = "Percent Change") +
+          ggtitle(title_value()) +
+          facet_wrap(~group, scales = "free_y", ncol = 1) +
+          coord_flip() +
+          theme(axis.title.y = element_text(margin = ggplot2::margin(r = 10 + input$ylab_value)),
+                plot.title = element_text(hjust = 0.5))
 
-      plot <- ggplot(percent_change_data, aes(x = ordered_compound_names, y = percent_change)) +
-        geom_bar(stat = "identity", position = "dodge") +
-        labs(x = "Compound", y = "Percent Change") +
-        ggtitle(title_value()) +
-        facet_wrap(~group, scales = "free_y", ncol = 1) +
-        coord_flip() +
-        theme(axis.title.y = element_text(margin = ggplot2::margin(r = 10 + input$ylab_value)),
-              plot.title = element_text(hjust = 0.5))
+        ggplotly(plot, height = height_value)
+      } else {
+        fold_change_data <- percent_change_data[order(-percent_change_data$fold_change), ][1:25, ]
+        fold_change_data <- fold_change_data[order(match(fold_change_data[[common_column()]], input$rank_list_basic)), ]
+        fold_change_data <- fold_change_data %>%
+          arrange(desc(fold_change)) %>%
+          mutate(ordered_compound_names = reorder(!!sym(common_column()), fold_change))
 
-      ggplotly(plot, height = height_value)
-
-
+        plot <- ggplot(fold_change_data, aes(x = ordered_compound_names, y = fold_change, fill = group)) +
+          geom_bar(stat = "identity", position = "dodge") +
+          geom_text(aes(label = round(fold_change, 2)), vjust = -0.5, size = 3) +
+          labs(x = common_column_value, y = if (log_check == FALSE) "Fold change" else "Log2 fold change") +
+          coord_flip() +
+          expand_limits(y = 0) +
+          theme(axis.title.y = element_text(margin = ggplot2::margin(r = 10 + input$ylab_value)),
+                plot.title = element_text(hjust = 0.5))
+        ggplotly(plot, height = height_value)
+          }
     } else {
-      percent_change_data <- spread(percent_change_data, key = "group", value = "percent_change")
-      if(nrow(real_data_merged) < 30) {
-        percent_change_data <- percent_change_data[order(match(percent_change_data[[common_column()]], input$rank_list_basic)), ]
-      }
+      if (perc_fold_value == 'Percent') {
+        percent_change_data <- percent_change_data %>%
+          select(-fold_change)
 
-      plot <- ggplot(gather(percent_change_data, key = "Group", value = "PercentChange", -.data[[common_column()]], -control_mean),
-             aes(x = .data[[common_column()]], y = PercentChange, fill = ifelse(PercentChange >= 0, "red", "green"))) +
-        geom_bar(stat = "identity", position = "dodge") +
-        geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-        geom_text(aes(label = sprintf("%.1f", PercentChange),
-                      y = PercentChange),
-                  position = position_dodge(width = 0.9), vjust = 0, size = 3) +
-        labs(x = "Compound", y = "Percent Change") +
-        ggtitle(title_value()) +
-        scale_x_discrete(limits = input$rank_list_basic) +
-        facet_wrap(~Group, scales = if (scale_check == FALSE) "free_y" else "fixed", ncol = 1) +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1),
-              axis.title.x = element_text(margin = ggplot2::margin(t = 20)),
-              axis.title.y = element_text(margin = ggplot2::margin(r = 10 + input$ylab_value)),
-              plot.title = element_text(hjust = 0.5),
-              panel.spacing = unit(1.5, "lines")
-        ) +
-        guides(fill = FALSE)
-      ggplotly(plot, height = height_value)
+        percent_change_data <- spread(percent_change_data, key = "group", value = "percent_change")
+        percent_change_data <- percent_change_data[order(match(percent_change_data[[common_column()]], input$rank_list_basic)), ]
+
+        plot <- ggplot(gather(percent_change_data, key = "Group", value = "PercentChange", -.data[[common_column()]], -control_mean),
+               aes(x = .data[[common_column()]], y = PercentChange, fill = ifelse(PercentChange >= 0, "red", "green"))) +
+          geom_bar(stat = "identity", position = "dodge") +
+          geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+          geom_text(aes(label = sprintf("%.1f", PercentChange),
+                        y = PercentChange),
+                    position = position_dodge(width = 0.9), vjust = 0, size = 3) +
+          labs(x = "Compound", y = "Percent Change") +
+          ggtitle(title_value()) +
+          scale_x_discrete(limits = input$rank_list_basic) +
+          facet_wrap(~Group, scales = if (scale_check == FALSE) "free_y" else "fixed", ncol = 1) +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                axis.title.x = element_text(margin = ggplot2::margin(t = 20)),
+                axis.title.y = element_text(margin = ggplot2::margin(r = 10 + input$ylab_value)),
+                plot.title = element_text(hjust = 0.5),
+                panel.spacing = unit(1.5, "lines")
+          ) +
+          guides(fill = FALSE)
+        ggplotly(plot, height = height_value)
+      } else {
+        percent_change_data <- percent_change_data %>%
+          select(-percent_change)
+
+        fold_change_data <- spread(percent_change_data, key = "group", value = "fold_change")
+        fold_change_data <- fold_change_data[order(match(fold_change_data[[common_column()]], input$rank_list_basic)), ]
+
+        plot <- ggplot(gather(fold_change_data, key = "Group", value = "FoldChange", -.data[[common_column()]], -control_mean),
+                       aes(x = .data[[common_column()]], y = FoldChange)) +
+          geom_bar(stat = "identity", position = "dodge") +
+          geom_text(aes(label = round(FoldChange, 2), y = FoldChange),
+                    position = position_dodge(width = 0.9), vjust = 0, size = 3) +
+          labs(x = common_column_value, y = if (log_check == FALSE) "Fold change" else "Log2 fold change") +
+          ggtitle(title_value()) +
+          scale_x_discrete(limits = input$rank_list_basic) +
+          facet_wrap(~Group, scales = if (scale_check == FALSE) "free_y" else "fixed", ncol = 1) +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                axis.title.x = element_text(margin = ggplot2::margin(t = 20)),
+                axis.title.y = element_text(margin = ggplot2::margin(r = 10 + input$ylab_value)),
+                plot.title = element_text(hjust = 0.5),
+                panel.spacing = unit(1.5, "lines")
+          ) +
+          guides(fill = FALSE)
+
+        ggplotly(plot, height = height_value)
+      }
     }
 
   })
 
   output$change_data <- plotly::renderPlotly({
     req(processed_data())
-    req(!is.null(input$checkbox_scale_value))
+    #req(!is.null(input$checkbox_scale_value))
     plot_changes()
   })
 
@@ -2224,7 +2270,7 @@ server <- function(input, output, session) {
     req(input$dist_plot_type, processed_data(), input$xlab_value, input$ylab_value)
     common_column_value <- common_column()
     top_criterium <- input$top_ranges_crit
-    scale_check <- input$checkbox_scale_value
+    scale_check <- input$checkbox_scale_value_2
     height_value <- input$height_value
     type_check <- input$dist_plot_type
     top_compound_values <- input$top_compound_range
@@ -2323,7 +2369,7 @@ server <- function(input, output, session) {
           select(-c(2))
         colnames(top_compounds)[1] = common_column_value
 
-      } else if (top_criterium == "Top RF Gini Index") {
+      } else if (top_criterium == "Top RF Gini") {
         gini_data <- processed_data()
         new_row <- rep(NA, ncol(gini_data))
         for (i in 2:ncol(gini_data)) {
@@ -2417,262 +2463,9 @@ server <- function(input, output, session) {
 
   output$dist_data <- plotly::renderPlotly({
     req(input$dist_plot_type)
-    req(!is.null(input$checkbox_scale_value))
+    #req(!is.null(input$checkbox_scale_value))
     plot_dist()
   })
-
-  # output$dist_data <- DT::renderDT(
-  #  DT::datatable(
-  #   plot_dist()
-  # ))
-
-  # Render Grubbs test outlier detection plot
-  plot_outlier <- reactive({
-    req(input$selector_dropdown, input$test_type_dropdown, processed_data())
-    selected_comp <- input$selector_dropdown
-    nudge_value <- input$nudge_value
-    test_type <- input$test_type_dropdown
-    data_scale_check <- input$checkbox_scale
-    height_value <- input$height_value
-    common_column_value <- common_column()
-    real_data_merged <- processed_data()
-
-
-    if (data_scale_check == "Yeo-Johnson") {
-      numeric_data <- real_data_merged[, -1]
-      norm_obj <- apply(numeric_data, 1, function(x) yeojohnson(x))
-      normalized_list <- vector("list", nrow(numeric_data))
-      for (i in 1:nrow(numeric_data)) {
-        normalized_list[[i]] <- as.data.frame(t(norm_obj[[i]]$x.t))
-      }
-      normalized_df <- do.call(rbind, normalized_list)
-      real_data_merged <- cbind(setNames(real_data_merged[common_column_value], common_column_value), normalized_df)
-    } else if (data_scale_check == "Ordered Quantile normalization") {
-      numeric_data <- real_data_merged[, -1]
-      norm_obj <- apply(numeric_data, 1, function(x) orderNorm(x))
-      normalized_list <- vector("list", nrow(numeric_data))
-      for (i in 1:nrow(numeric_data)) {
-        normalized_list[[i]] <- as.data.frame(t(norm_obj[[i]]$x.t))
-      }
-      normalized_df <- do.call(rbind, normalized_list)
-      real_data_merged <- cbind(setNames(real_data_merged[common_column_value], common_column_value), normalized_df)
-    } else if (data_scale_check == "sqrt normalization") {
-      numeric_data <- real_data_merged[, -1]
-      norm_obj <- apply(numeric_data, 1, function(x) sqrt_x(x))
-      normalized_list <- vector("list", nrow(numeric_data))
-      for (i in 1:nrow(numeric_data)) {
-        normalized_list[[i]] <- as.data.frame(t(norm_obj[[i]]$x.t))
-      }
-      normalized_df <- do.call(rbind, normalized_list)
-      real_data_merged <- cbind(setNames(real_data_merged[common_column_value], common_column_value), normalized_df)
-    } else if (data_scale_check == "log normalization") {
-      numeric_data <- real_data_merged[, -1]
-      norm_obj <- apply(numeric_data, 1, function(x) log_x(x))
-      normalized_list <- vector("list", nrow(numeric_data))
-      for (i in 1:nrow(numeric_data)) {
-        normalized_list[[i]] <- as.data.frame(t(norm_obj[[i]]$x.t))
-      }
-      normalized_df <- do.call(rbind, normalized_list)
-      real_data_merged <- cbind(setNames(real_data_merged[common_column_value], common_column_value), normalized_df)
-    } else {
-      real_data_merged <- real_data_merged
-    }
-
-
-    long_data <- real_data_merged %>%
-      filter(.data[[common_column()]] == selected_comp) %>%
-      pivot_longer(cols = -1, names_to = "sample", values_to = "value") %>%
-      separate(sample, into = c("group", "sample"), sep = "_")
-
-    calculate_grubbs_pvalue <- function(x) {
-      result_max <- grubbs.test(x)
-      result_second_max <- grubbs.test(x[-which.max(x)])
-      result_third_max <- grubbs.test(sort(x, decreasing = TRUE)[-1:-2])
-      result_fourth_max <- grubbs.test(sort(x, decreasing = TRUE)[-1:-3])
-      result_fifth_max <- grubbs.test(sort(x, decreasing = TRUE)[-1:-4])
-      result_min <- grubbs.test(x, opposite = TRUE)
-      if (length(x) > 30) {
-        result_two_max <- grubbs.test(x)
-        result_two_min <- grubbs.test(x)
-      } else {
-        result_two_max <- grubbs.test(x, type = 20)
-        result_two_min <- grubbs.test(x, type = 20, opposite = TRUE)
-      }
-      return(list(
-        p_value = result_max$p.value,
-        max_value = max(x, na.rm = TRUE),
-        p_value_min = result_min$p.value,
-        min_value = min(x, na.rm = TRUE),
-        p_value_second_max = result_second_max$p.value,
-        second_max_value = max(x[-which.max(x)], na.rm = TRUE),
-        p_value_third_max = result_third_max$p.value,
-        third_max_value = max(sort(x, decreasing = TRUE)[-1:-2], na.rm = TRUE),
-        p_value_fourth_max = result_fourth_max$p.value,
-        fourth_max_value = max(sort(x, decreasing = TRUE)[-1:-3], na.rm = TRUE),
-        p_value_fifth_max = result_fifth_max$p.value,
-        fifth_max_value = max(sort(x, decreasing = TRUE)[-1:-4], na.rm = TRUE),
-        p_value_two_max = result_two_max$p.value,
-        p_value_two_min = result_two_min$p.value
-      ))
-    }
-
-    grubbs_results <- long_data %>%
-      group_by(.data[[common_column()]], group) %>%
-      summarise(
-        p_value_max = calculate_grubbs_pvalue(value)$p_value,
-        max_value = calculate_grubbs_pvalue(value)$max_value,
-        p_value_min = calculate_grubbs_pvalue(value)$p_value_min,
-        min_value = calculate_grubbs_pvalue(value)$min_value,
-        p_value_second_max = calculate_grubbs_pvalue(value)$p_value_second_max,
-        second_max_value = calculate_grubbs_pvalue(value)$second_max_value,
-        p_value_third_max = calculate_grubbs_pvalue(value)$p_value_third_max,
-        third_max_value = calculate_grubbs_pvalue(value)$third_max_value,
-        p_value_fourth_max = calculate_grubbs_pvalue(value)$p_value_fourth_max,
-        fourth_max_value = calculate_grubbs_pvalue(value)$fourth_max_value,
-        p_value_fifth_max = calculate_grubbs_pvalue(value)$p_value_fifth_max,
-        fifth_max_value = calculate_grubbs_pvalue(value)$fifth_max_value,
-        p_value_two_max = calculate_grubbs_pvalue(value)$p_value_two_max,
-        p_value_two_min = calculate_grubbs_pvalue(value)$p_value_two_min
-      ) %>%
-      ungroup()
-
-    if (test_type == "Max") {
-      out_plot <- ggplot(long_data, aes(x = group, y = value, fill = group)) +
-        scale_fill_viridis_d( option = "D") +
-        geom_violin(alpha=0.4, position = position_dodge(width = .75),size=1,color="black") +
-        geom_point(shape = 21,size=2, position = position_jitterdodge(dodge.width = .75), color="black",alpha=1) +
-        geom_text(
-        data = grubbs_results,
-        aes(x = group, y = max_value + (max_value*.025), label = sprintf("p-val: %.3f", p_value_max)),
-        nudge_x = abs(nudge_value),
-        vjust = -0.5,
-        size = 3
-      )
-    } else if (test_type == "Second Max") {
-      out_plot <- ggplot() +
-        scale_fill_viridis_d( option = "D") +
-        geom_violin(data = long_data %>%
-                      group_by(group) %>%
-                      mutate(subset = ifelse(value == max(value, na.rm = TRUE), NA, value)),
-                    aes(x = group, y = subset, fill = group),
-                    alpha = 0.4, position = position_dodge(width = .75), size = 1, color = "black") +
-        geom_point(data = long_data %>%
-                     group_by(group) %>%
-                     mutate(opacity = ifelse(value == max(value, na.rm = TRUE), 0.25, 1)),
-                   aes(x = group, y = value, alpha = opacity, fill = group),
-                   shape = 21,
-                   size = 2,
-                   position = position_jitterdodge(dodge.width = 0.75),
-                   color = "black") +
-        geom_text(
-          data = grubbs_results,
-          aes(x = group, y = second_max_value + (second_max_value*.025), label = sprintf("p-val: %.3f", p_value_second_max)),
-          nudge_x = abs(nudge_value),
-          vjust = -0.5,
-          size = 3)
-
-
-    } else if (test_type == "Third Max") {
-      out_plot <- ggplot() +
-        scale_fill_viridis_d( option = "D") +
-        geom_violin(data = long_data %>%
-                      group_by(group) %>%
-                      mutate(subset = ifelse(value == max(value, na.rm = TRUE) | value == sort(value, decreasing = TRUE)[2], NA, value)),
-                    aes(x = group, y = subset, fill = group),
-                    alpha = 0.4, position = position_dodge(width = .75), size = 1, color = "black") +
-        geom_point(data = long_data %>%
-                     group_by(group) %>%
-                     mutate(opacity = ifelse(value == max(value, na.rm = TRUE) | value == sort(value, decreasing = TRUE)[2], 0.25, 1)),
-                   aes(x = group, y = value, alpha = opacity, fill = group),
-                   shape = 21,
-                   size = 2,
-                   position = position_jitterdodge(dodge.width = 0.75),
-                   color = "black") +
-        geom_text(
-          data = grubbs_results,
-          aes(x = group, y = third_max_value + (third_max_value*.025), label = sprintf("p-val: %.3f", p_value_third_max)),
-          nudge_x = abs(nudge_value),
-          vjust = -0.5,
-          size = 3
-        )
-    } else if (test_type == "Fourth Max") {
-      out_plot <- ggplot() +
-        scale_fill_viridis_d( option = "D") +
-        geom_violin(data = long_data %>%
-                      group_by(group) %>%
-                      mutate(subset = ifelse(value == max(value, na.rm = TRUE) | value == sort(value, decreasing = TRUE)[2] | value == sort(value, decreasing = TRUE)[3], NA, value)),
-                    aes(x = group, y = subset, fill = group),
-                    alpha = 0.4, position = position_dodge(width = .75), size = 1, color = "black") +
-        geom_point(data = long_data %>%
-                     group_by(group) %>%
-                     mutate(opacity = ifelse(value == max(value, na.rm = TRUE) | value == sort(value, decreasing = TRUE)[2] | value == sort(value, decreasing = TRUE)[3], 0.25, 1)),
-                   aes(x = group, y = value, alpha = opacity, fill = group),
-                   shape = 21,
-                   size = 2,
-                   position = position_jitterdodge(dodge.width = 0.75),
-                   color = "black") +
-        geom_text(
-          data = grubbs_results,
-          aes(x = group, y = fourth_max_value + (fourth_max_value*.025), label = sprintf("p-val: %.3f", p_value_fourth_max)),
-          nudge_x = abs(nudge_value),
-          vjust = -0.5,
-          size = 3
-        )
-    } else if (test_type == "Fifth Max") {
-      out_plot <- ggplot() +
-        scale_fill_viridis_d( option = "D") +
-        geom_violin(data = long_data %>%
-                      group_by(group) %>%
-                      mutate(subset = ifelse(value == max(value, na.rm = TRUE) | value == sort(value, decreasing = TRUE)[2] | value == sort(value, decreasing = TRUE)[3] | value == sort(value, decreasing = TRUE)[4], NA, value)),
-                    aes(x = group, y = subset, fill = group),
-                    alpha = 0.4, position = position_dodge(width = .75), size = 1, color = "black") +
-        geom_point(data = long_data %>%
-                     group_by(group) %>%
-                     mutate(opacity = ifelse(value == max(value, na.rm = TRUE) | value == sort(value, decreasing = TRUE)[2] | value == sort(value, decreasing = TRUE)[3] | value == sort(value, decreasing = TRUE)[4], 0.25, 1)),
-                   aes(x = group, y = value, alpha = opacity, fill = group),
-                   shape = 21,
-                   size = 2,
-                   position = position_jitterdodge(dodge.width = 0.75),
-                   color = "black") +
-        geom_text(
-          data = grubbs_results,
-          aes(x = group, y = fifth_max_value + (fifth_max_value*.025), label = sprintf("p-val: %.3f", p_value_fifth_max)),
-          nudge_x = abs(nudge_value),
-          vjust = -0.5,
-          size = 3
-        )
-    } else {
-      out_plot <- ggplot(long_data, aes(x = group, y = value, fill = group)) +
-        scale_fill_viridis_d( option = "D") +
-        geom_violin(alpha=0.4, position = position_dodge(width = .75),size=1,color="black") +
-        geom_point(shape = 21,size=2, position = position_jitterdodge(dodge.width = .75), color="black",alpha=1) +
-        geom_text(
-        data = grubbs_results,
-        aes(x = group, y = min_value - (min_value*.025),label = sprintf("p-val: %.3f", p_value_min)),
-        nudge_x = abs(nudge_value),
-        vjust = -0.5,
-        size = 3
-      )
-    }
-
-    plot <- out_plot +
-      ggtitle(title_value()) +
-      labs(x = selected_comp, y = "Value") +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1),
-            plot.title = element_text(hjust = 0.5))
-
-    ggplotly(plot, height = height_value)
-  })
-
-  output$out_data <- plotly::renderPlotly({
-    req(input$selector_dropdown, input$test_type_dropdown)
-    plot_outlier()
-  })
-
-   #   output$out_data <- DT::renderDT(
-   #    DT::datatable(
-   #    plot_outlier()
-   # ))
 
   # Render PCA outlier detection plot
   stored_full_df <- reactiveVal(NULL)
@@ -3576,7 +3369,7 @@ server <- function(input, output, session) {
 
   # Levene's page buttons
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$leve_prev_page_button <- renderUI({
         tagList(br(),
                 actionButton("leve_prev_page", "Previous 50 Compounds"),
@@ -3591,7 +3384,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$leve_next_page_button <- renderUI({
         tagList(
           actionButton("leve_next_page", "Next 50 Compounds")
@@ -3605,7 +3398,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$leve_page_info_text <- renderUI({
         tagList(textOutput("leve_page_info"),
                 br()
@@ -3863,7 +3656,7 @@ server <- function(input, output, session) {
 
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$levene_percent_above_005 <- renderText({
         req(levene_data_stored(), input$homoscedas_norm, input$homoscedas_trans, input$homoscedas_scale)
         joined_data <- levene_data_stored()
@@ -3878,7 +3671,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$levene_highest_p_val <- renderText({
         req(levene_data_stored(), input$homoscedas_norm, input$homoscedas_trans, input$homoscedas_scale)
         joined_data <- levene_data_stored()
@@ -3895,7 +3688,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
+    if (!is.null(processed_data()) && active_tab() == "Variance") {
       output$levene_lowest_p_val <- renderText({
         req(levene_data_stored(), input$homoscedas_norm, input$homoscedas_trans, input$homoscedas_scale)
         joined_data <- levene_data_stored()
