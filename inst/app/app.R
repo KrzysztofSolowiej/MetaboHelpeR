@@ -28,6 +28,7 @@ library(car)
 library(beanplot)
 library(shinycssloaders)
 library(shinyjs)
+library(shinyBS)
 library(preprocessCore)
 library(dunn.test)
 
@@ -53,6 +54,9 @@ ui <- fluidPage(
       uiOutput('rt_threshold'),
       uiOutput('duplicates_button'),
       uiOutput('dupli_cv_button'),
+      uiOutput('adduct_tolerance_slider'),
+      uiOutput('adducts_search_button'),
+      uiOutput('adducts_merge_button'),
       uiOutput('anom_slider'),
       uiOutput('anomalies_button'),
       uiOutput('select_row'),
@@ -213,7 +217,16 @@ ui <- fluidPage(
                  withSpinner(DT::DTOutput('process_data')),
                  div(id = "spinner", class = "loader", style = "display:none;"),
                  DT::DTOutput("duplicate_info"),
-                 DT::DTOutput("anomaly_info")),
+                 DT::DTOutput("adduct_info"),
+                 #DT::DTOutput("anomaly_info")
+                 #DT::DTOutput("merged_info"),
+                 bsModal("anomalyModal", "Anomaly Information", "anomalies_button", size = "large",
+                         DT::DTOutput("anomaly_info")),
+                 bsModal("mergeModal", "Merge Compounds", "adduct_merge", size = "large",
+                         selectInput("merge_name", "Select name for merged compound:", choices = NULL),
+                         textInput("custom_merge_name", "Or type a custom name:", value = ""),
+                         actionButton("confirm_merge", "Confirm Merge"))
+                 ),
         tabPanel(id = 'tably', 'Table',
                  withSpinner(DT::DTOutput('data_table'))),
         tabPanel(id = 'rangy', 'Ranges',
@@ -304,7 +317,6 @@ server <- function(input, output, session) {
 
   group_data <- reactiveVal(list())
   common_column <- reactiveVal(NULL)
-  merged_data <- reactiveVal(NULL)
   title_value <- reactiveVal(NULL)
   active_tab <- reactiveVal(NULL)
   num_of_group <- reactiveVal(NULL)
@@ -346,17 +358,6 @@ server <- function(input, output, session) {
 
 
   # File input
-  # output$file_input <- renderUI({
-  #   if (is.null(my_data())) {
-  #     fileInput(
-  #       inputId = "users_path",
-  #       label = "Select data:",
-  #       multiple = FALSE,
-  #       accept = c(".csv", ".xlsx")
-  #     )
-  #   }
-  # })
-
   output$file_input <- renderUI({
     if (is.null(my_data())) {
       tagList(
@@ -614,7 +615,7 @@ server <- function(input, output, session) {
     if (!is.null(my_data()) && active_tab() == "Pre-process") {
       output$duplicates_button <- renderUI({
         tagList(
-          actionButton("check_duplicates", "Check for Duplicates"),
+          actionButton("check_duplicates", "Check for Duplicates/Adducts"),
           br(),
           br()
         )
@@ -625,6 +626,8 @@ server <- function(input, output, session) {
       })
     }
   })
+
+  duplicate_info_df <- reactiveVal(NULL)
 
   observeEvent(input$check_duplicates, {
     req(updated_data())
@@ -647,20 +650,169 @@ server <- function(input, output, session) {
                             "None" = Inf,
                             as.numeric(input$ppm_thresh))
 
-    # Show spinner
-    runjs('$("#spinner").show();')
 
     data_with_near_duplicates <- find_near_duplicates(data, mass_threshold, rt_threshold, ppm_threshold)
-
     rv$near_duplicate_data <- data_with_near_duplicates[data_with_near_duplicates$Near_Duplicate == TRUE, ]
+    duplicate_info_df(rv$near_duplicate_data)
 
     output$duplicate_info <- DT::renderDT({
-      # Hide spinner
-      runjs('$("#spinner").hide();')
-
-      DT::datatable(rv$near_duplicate_data, options = list(ordering = FALSE, scrollX = TRUE), selection = list(target = 'column'), rownames = TRUE)
+      DT::datatable(duplicate_info_df(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'column'), rownames = TRUE)
     })
   })
+
+  # Render tolerance slider
+  observe({
+    if (!is.null(my_data()) && !is.null(duplicate_info_df()) && active_tab() == "Pre-process") {
+      output$adduct_tolerance_slider <- renderUI({
+        tagList(
+          br(),
+          sliderInput(
+            'add_tol', 'Set tolerance:',
+            min = 0.00001, max = 0.001, value = 0.0001, step = 0.0001
+          )
+        )
+      })
+    } else {
+      output$adduct_tolerance_slider <- renderUI({
+        div()
+      })
+    }
+  })
+
+  # Render Adducts searcher
+    observe({
+    if (!is.null(my_data()) && !is.null(duplicate_info_df()) && active_tab() == "Pre-process") {
+      output$adducts_search_button <- renderUI({
+        tagList(
+        br(),
+        selectInput("adduct_type", "Search for adducts:", c("None", "Sodium (21.9819)", "Potasium (37.9559)"))
+        )
+      })
+    } else {
+      output$adducts_search_button <- renderUI({
+        div()
+      })
+    }
+  })
+
+  adduct_info_df <- reactiveVal(NULL)
+
+    observeEvent(list(input$adduct_type, input$add_tol), {
+      req(duplicate_info_df(), input$rt_thresh, input$add_tol)
+      rv_data <- duplicate_info_df()
+
+      rt_threshold <- switch(input$rt_thresh,
+                             "Exact" = 0,
+                             "None" = Inf,
+                             as.numeric(input$rt_thresh))
+
+      adduct_mass_diff <- switch(input$adduct_type,
+                                 "Sodium (21.9819)" = 21.9819,
+                                 "Potasium (37.9559)" = 37.9559,
+                                 "None" = NA)
+
+      tolerance <- input$add_tol
+
+      if (!is.na(adduct_mass_diff)) {
+        mass_diff_matrix <- abs(outer(rv_data$New_Masses, rv_data$New_Masses, "-"))
+        rt_diff_matrix <- abs(outer(rv_data$New_Retention_Time, rv_data$New_Retention_Time, "-"))
+
+        mass_diff_indices <- which(abs(mass_diff_matrix - adduct_mass_diff) < tolerance & rt_diff_matrix <= rt_threshold, arr.ind = TRUE)
+        selected_indices <- unique(c(mass_diff_indices[,1], mass_diff_indices[,2]))
+        data <- rv_data[selected_indices, ]
+        adduct_info_df(data)
+
+        output$adduct_info <- DT::renderDT({
+          DT::datatable(adduct_info_df(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'row'), rownames = TRUE)
+        })
+      } else {
+        adduct_info_df(NULL)
+        output$adduct_info <- DT::renderDT({
+          DT::datatable(data.frame(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'row'), rownames = TRUE)
+        })
+      }
+    })
+
+    merged_adduct_data <- reactiveVal(NULL)
+
+    # Render merge button
+    observe({
+      if (!is.null(my_data()) && !is.null(adduct_info_df()) && active_tab() == "Pre-process") {
+        output$adducts_merge_button <- renderUI({
+          tagList(
+            actionButton("adduct_merge", "Merge selected compounds"),
+            br()
+          )
+        })
+      } else {
+        output$adducts_merge_button <- renderUI({
+          div()
+        })
+      }
+    })
+
+    # Handle the merge button click
+    observeEvent(input$adduct_merge, {
+      selected_rows <- input$adduct_info_rows_selected
+      if (length(selected_rows) > 1) {
+        selected_data <- adduct_info_df()[selected_rows, ]
+        updateSelectInput(session, "merge_name", choices = selected_data[[1]], selected = selected_data[[1]][1])
+        showModal(modalDialog(
+          title = "Merge Compounds",
+          selectInput("merge_name", "Select name for merged compound:", choices = selected_data[[1]]),
+          textInput("custom_merge_name", "Or type a custom name:", value = ""),
+          checkboxInput("remove_originals", "Remove original compounds after merging", value = TRUE),
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton("confirm_merge", "Confirm Merge")
+          )
+        ))
+      }
+    })
+
+
+    observeEvent(input$confirm_merge, {
+      removeModal()
+      selected_rows <- input$adduct_info_rows_selected
+      if (length(selected_rows) > 1) {
+        selected_data <- adduct_info_df()[selected_rows, ]
+        merge_name <- ifelse(input$custom_merge_name != "", input$custom_merge_name, input$merge_name)
+
+        # Sum numerical values
+        merged_row <- colSums(selected_data[, sapply(selected_data, is.numeric)], na.rm = TRUE)
+        merged_row <- as.data.frame(t(merged_row))
+        merged_row[[common_column()]] <- merge_name
+
+
+        combined_data <- cbind(merged_row[common_column()], merged_row)
+        combined_data <- combined_data[, -((ncol(combined_data) - 4):ncol(combined_data))]
+
+
+        current_data <- updated_data()
+        new_row <- current_data[1, , drop = FALSE]
+        new_row[,] <- NA
+        new_row[colnames(combined_data)] <- combined_data
+
+        # Replace the original rows with the merged row in updated_data()
+        # names_to_remove <- selected_data[[common_column()]]
+        # remaining_data <- updated_data()[!updated_data()[[common_column()]] %in% names_to_remove, ]
+        # updated_data(remaining_data)
+        # updated_data(rbind(updated_data(), new_row))
+
+        if (input$remove_originals) {
+          names_to_remove <- selected_data[[common_column()]]
+          remaining_data <- updated_data()[!updated_data()[[common_column()]] %in% names_to_remove, ]
+          updated_data(rbind(remaining_data, new_row))
+        } else {
+          updated_data(rbind(updated_data(), new_row))
+        }
+
+        output$merged_info <- DT::renderDT({
+          DT::datatable(new_row, options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'row'), rownames = TRUE)
+        })
+      }
+    })
+
 
   # Render mass duplicates threshold
   observe({
@@ -706,11 +858,11 @@ server <- function(input, output, session) {
 
   # Render check coefficient of variance button
   observe({
-    if (!is.null(my_data()) && active_tab() == "Pre-process") {
+    if (!is.null(my_data()) && !is.null(duplicate_info_df()) && active_tab() == "Pre-process") {
       output$dupli_cv_button <- renderUI({
         tagList(
+          hr(),
           actionButton("calc_cv", "Calculate CV for Selected Columns"),
-          br(),
           br()
         )
       })
@@ -722,8 +874,8 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$calc_cv, {
-    req(rv$near_duplicate_data)
-    data <- rv$near_duplicate_data
+    req(duplicate_info_df())
+    data <- duplicate_info_df()
     data <- select(data, -Near_Duplicate)
     selected_columns <- input$duplicate_info_columns_selected
     selected_columns <- selected_columns[selected_columns != "Original_Index"]
@@ -741,7 +893,7 @@ server <- function(input, output, session) {
     }
 
     output$duplicate_info <- DT::renderDT({
-      DT::datatable(data, extensions = c('FixedColumns', 'ColReorder'), options = list(ordering = FALSE, scrollX = TRUE, fixedColumns = list(leftColumns = 2, rightColumns = 0)), selection = list(target = 'row'), rownames = TRUE)
+      DT::datatable(data, options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'column'), rownames = TRUE)
     })
   })
 
@@ -765,9 +917,12 @@ server <- function(input, output, session) {
   observe({
     if (!is.null(processed_data()) && active_tab() == "Pre-process") {
       output$anom_slider <- renderUI({
-        sliderInput(
-          'anom_slide_value', 'Percentage of 0/NA values:',
-          min = 1, max = 100, value = 90, step = 1
+        tagList(
+          hr(),
+          sliderInput(
+            'anom_slide_value', 'Percentage of 0/NA values:',
+            min = 1, max = 100, value = 90, step = 1
+          )
         )
       })
     } else {
@@ -1362,21 +1517,6 @@ server <- function(input, output, session) {
     }
   })
 
-  # Render check normality (Shapiro-Wilk test), homoscedasticity (Levene's test) and independence (Pearson for normal distribution/Spearman's Rank Correlation for non-normal) check
-  # observe({
-  #   if (!is.null(processed_data()) && active_tab() == "Normality") {
-  #     output$normality_button <- renderUI({
-  #       tagList(
-  #         hr(),
-  #         actionButton("check_normality", "Check normality")
-  #       )
-  #     })
-  #   } else {
-  #     output$normality_button <- renderUI({
-  #       div()
-  #     })
-  #   }
-  # })
 
   observe({
     if (!is.null(processed_data()) && active_tab() == "Normality") {
@@ -1438,23 +1578,6 @@ server <- function(input, output, session) {
     }
   })
 
-
-  # equal variances
-  # observe({
-  #   if (!is.null(processed_data()) && active_tab() == "Homoscedasticity") {
-  #     output$vareq_button <- renderUI({
-  #       tagList(
-  #         br(),
-  #         actionButton("check_homoscedasticity", "Check equality of variances")
-  #       )
-  #
-  #     })
-  #   } else {
-  #     output$vareq_button <- renderUI({
-  #       div()
-  #     })
-  #   }
-  # })
 
   observe({
     if (!is.null(processed_data()) && active_tab() == "Variance") {
@@ -1596,7 +1719,6 @@ server <- function(input, output, session) {
       DT::datatable(data_df, options = list(ordering = FALSE, scrollX = TRUE), selection = list(target = 'column'))
     }
   })
-
 
   output$process_data = DT::renderDataTable(
     pre_process_table())
@@ -2174,10 +2296,6 @@ server <- function(input, output, session) {
     plot_changes()
   })
 
-  # output$change_data <- DT::renderDT({
-  #   req(merged_data())
-  #   plot_changes()
-  # })
 
   # Render fold change plot
   plot_fold <- reactive({
