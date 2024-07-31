@@ -210,16 +210,55 @@ ui <- fluidPage(
             left: 0px;
             width: 60%;
         }
+
+      #process_data_container {
+        background-color: #f2f2f2;
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      #duplicate_info_container {
+        background-color: #d9edf7;
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      #adduct_info_container {
+        background-color: #dff0d8;
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      .merge-button {
+        background-color: #dff0d8;
+        color: #000;
+      }
+
+      .cvcalc-button {
+        background-color: #d9edf7;
+        color: #000;
+      }
+
+      .blue-container {
+        background-color: #d9edf7;
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      .green-container {
+        background-color: #dff0d8;
+        padding: 10px;
+        border-radius: 5px;
+      }
       "))
       ),
       tabsetPanel(id = "tabsetPanelID",
         tabPanel(id = 'processy', 'Pre-process',
-                 withSpinner(DT::DTOutput('process_data')),
+                 uiOutput("dynamic_tables"),
+                 #withSpinner(DT::DTOutput('process_data')),
                  div(id = "spinner", class = "loader", style = "display:none;"),
-                 DT::DTOutput("duplicate_info"),
-                 DT::DTOutput("adduct_info"),
-                 #DT::DTOutput("anomaly_info")
-                 #DT::DTOutput("merged_info"),
+                 # DT::DTOutput("duplicate_info"),
+                 # DT::DTOutput("adduct_info"),
                  bsModal("anomalyModal", "Anomaly Information", "anomalies_button", size = "large",
                          DT::DTOutput("anomaly_info")),
                  bsModal("mergeModal", "Merge Compounds", "adduct_merge", size = "large",
@@ -609,6 +648,31 @@ server <- function(input, output, session) {
     return(data)
   }
 
+  #Render dynamic tables
+  render_dynamic_tables <- function() {
+    output$dynamic_tables <- renderUI({
+      tagList(
+        if (!is.null(duplicate_info_df())) {
+          tags$div(id = "duplicate_info_container", withSpinner(DT::DTOutput('duplicate_info')))
+        },
+        if (!is.null(adduct_info_df())) {
+          tags$div(id = "adduct_info_container", DT::DTOutput('adduct_info'))
+        },
+        if (!is.null(updated_data())) {
+          tags$div(id = "process_data_container", withSpinner(DT::DTOutput('process_data')))
+        }
+      )
+    })
+    output$duplicate_info <- DT::renderDT({
+      DT::datatable(duplicate_info_df(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'column'), rownames = TRUE)
+    })
+    output$adduct_info <- DT::renderDT({
+      DT::datatable(adduct_info_df(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'row'), rownames = TRUE)
+    })
+    output$process_data <- DT::renderDT({
+      DT::datatable(updated_data(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'column'), rownames = TRUE)
+    })
+  }
 
   # Render check duplicates button
   observe({
@@ -631,6 +695,10 @@ server <- function(input, output, session) {
 
   observeEvent(input$check_duplicates, {
     req(updated_data())
+
+    loading_id <- showNotification("Checking for duplicates/adducts...", duration = NULL, closeButton = FALSE)
+    on.exit(removeNotification(loading_id), add = TRUE)
+
     data <- updated_data()
     data$Original_Index <- seq_len(nrow(data))
     data <- pars_compounds(data)
@@ -655,22 +723,22 @@ server <- function(input, output, session) {
     rv$near_duplicate_data <- data_with_near_duplicates[data_with_near_duplicates$Near_Duplicate == TRUE, ]
     duplicate_info_df(rv$near_duplicate_data)
 
-    output$duplicate_info <- DT::renderDT({
-      DT::datatable(duplicate_info_df(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'column'), rownames = TRUE)
-    })
+    render_dynamic_tables()
   })
 
   # Render tolerance slider
   observe({
     if (!is.null(my_data()) && !is.null(duplicate_info_df()) && active_tab() == "Pre-process") {
       output$adduct_tolerance_slider <- renderUI({
-        tagList(
-          br(),
-          sliderInput(
-            'add_tol', 'Set tolerance:',
-            min = 0.00001, max = 0.001, value = 0.0001, step = 0.0001
+        div(
+          class = "blue-container",
+            tagList(
+              sliderInput(
+                'add_tol', 'Set tolerance for adduct searching:',
+                min = 0.00001, max = 0.001, value = 0.0001, step = 0.0001
+              )
+            )
           )
-        )
       })
     } else {
       output$adduct_tolerance_slider <- renderUI({
@@ -680,12 +748,14 @@ server <- function(input, output, session) {
   })
 
   # Render Adducts searcher
-    observe({
+  observe({
     if (!is.null(my_data()) && !is.null(duplicate_info_df()) && active_tab() == "Pre-process") {
       output$adducts_search_button <- renderUI({
-        tagList(
-        br(),
-        selectInput("adduct_type", "Search for adducts:", c("None", "Sodium (21.9819)", "Potasium (37.9559)"))
+        div(
+          class = "blue-container",
+          tagList(
+            selectInput("adduct_type", "Search for adducts:", c("None", "Sodium (21.9819)", "Potasium (37.9559)"))
+          )
         )
       })
     } else {
@@ -721,15 +791,10 @@ server <- function(input, output, session) {
         selected_indices <- unique(c(mass_diff_indices[,1], mass_diff_indices[,2]))
         data <- rv_data[selected_indices, ]
         adduct_info_df(data)
-
-        output$adduct_info <- DT::renderDT({
-          DT::datatable(adduct_info_df(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'row'), rownames = TRUE)
-        })
+        render_dynamic_tables()
       } else {
         adduct_info_df(NULL)
-        output$adduct_info <- DT::renderDT({
-          DT::datatable(data.frame(), options = list(ordering = TRUE, scrollX = TRUE), selection = list(target = 'row'), rownames = TRUE)
-        })
+        render_dynamic_tables()
       }
     })
 
@@ -739,9 +804,12 @@ server <- function(input, output, session) {
     observe({
       if (!is.null(my_data()) && !is.null(adduct_info_df()) && active_tab() == "Pre-process") {
         output$adducts_merge_button <- renderUI({
-          tagList(
-            actionButton("adduct_merge", "Merge selected compounds"),
-            br()
+          div(
+            class = "green-container",
+            tagList(
+              actionButton("adduct_merge", "Merge selected compounds", class = "merge-button"),
+              br()
+            )
           )
         })
       } else {
@@ -792,12 +860,6 @@ server <- function(input, output, session) {
         new_row <- current_data[1, , drop = FALSE]
         new_row[,] <- NA
         new_row[colnames(combined_data)] <- combined_data
-
-        # Replace the original rows with the merged row in updated_data()
-        # names_to_remove <- selected_data[[common_column()]]
-        # remaining_data <- updated_data()[!updated_data()[[common_column()]] %in% names_to_remove, ]
-        # updated_data(remaining_data)
-        # updated_data(rbind(updated_data(), new_row))
 
         if (input$remove_originals) {
           names_to_remove <- selected_data[[common_column()]]
@@ -860,10 +922,12 @@ server <- function(input, output, session) {
   observe({
     if (!is.null(my_data()) && !is.null(duplicate_info_df()) && active_tab() == "Pre-process") {
       output$dupli_cv_button <- renderUI({
-        tagList(
-          hr(),
-          actionButton("calc_cv", "Calculate CV for Selected Columns"),
-          br()
+        div(
+          class = "blue-container",
+          tagList(
+            actionButton("calc_cv", "Calculate CV for Selected Columns", class = "cvcalc-button"),
+            br()
+          )
         )
       })
     } else {
@@ -1696,32 +1760,44 @@ server <- function(input, output, session) {
   modified_columns <- reactiveVal(NULL)
 
   # Render pre-process
+  # pre_process_table <- reactive({
+  #   req(updated_data())
+  #   data_df <- updated_data()
+  #
+  #   # if (input$t_button) {
+  #   #   t_data_df <- t(data_df)
+  #   #   new_names <- t(data_df[,1])
+  #   #   print(new_names)
+  #   #   rownames(t_data_df) <- colnames(data_df)
+  #   #   colnames(t_data_df) <- new_names
+  #   #   data_df <- t_data_df
+  #   #   transposed_table_stored(data_df)
+  #   #   data_df
+  #   # } else {
+  #   #   data_df <- data_df
+  #   # }
+  #
+  #   if (input$deselect_all > 0) {
+  #     DT::datatable(data_df, options = list(ordering = FALSE, scrollX = TRUE), selection = list(target = 'column', selected = NULL))
+  #   } else {
+  #     DT::datatable(data_df, options = list(ordering = FALSE, scrollX = TRUE), selection = list(target = 'column'))
+  #   }
+  # })
+
   pre_process_table <- reactive({
     req(updated_data())
     data_df <- updated_data()
-
-    # if (input$t_button) {
-    #   t_data_df <- t(data_df)
-    #   new_names <- t(data_df[,1])
-    #   print(new_names)
-    #   rownames(t_data_df) <- colnames(data_df)
-    #   colnames(t_data_df) <- new_names
-    #   data_df <- t_data_df
-    #   transposed_table_stored(data_df)
-    #   data_df
-    # } else {
-    #   data_df <- data_df
-    # }
-
-    if (input$deselect_all > 0) {
-      DT::datatable(data_df, options = list(ordering = FALSE, scrollX = TRUE), selection = list(target = 'column', selected = NULL))
-    } else {
-      DT::datatable(data_df, options = list(ordering = FALSE, scrollX = TRUE), selection = list(target = 'column'))
-    }
+    DT::datatable(data_df, options = list(ordering = FALSE, scrollX = TRUE), selection = list(target = 'column'))
   })
 
-  output$process_data = DT::renderDataTable(
-    pre_process_table())
+  observeEvent(input$deselect_all, {
+    output$process_data <- DT::renderDT({
+      DT::datatable(updated_data(), options = list(ordering = FALSE, scrollX = TRUE), selection = list(target = 'column', selected = NULL))
+    })
+  })
+
+  # output$process_data = DT::renderDataTable(
+  #   pre_process_table())
 
 
   observeEvent(input$process_data_columns_selected, {
@@ -4966,7 +5042,7 @@ server <- function(input, output, session) {
       })
     }
   })
-
+  render_dynamic_tables()
 
 }
 shinyApp(ui = ui, server = server)
