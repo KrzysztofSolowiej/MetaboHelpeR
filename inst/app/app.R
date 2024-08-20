@@ -395,6 +395,10 @@ server <- function(input, output, session) {
     return(data)
   }
 
+  get_group_info <- function(col_names) {
+    groups <- gsub("^group(\\d+)_.*", "group\\1", col_names)
+    return(groups)
+  }
 
   # File input
   output$file_input <- renderUI({
@@ -3476,13 +3480,23 @@ server <- function(input, output, session) {
 
 
   output$hover_histogram <- renderPlot({
-    req(input$plot_hover, current_page(), shapiro_data_stored(), input$normality_sort,  input$normality_norm, input$normality_trans, input$normality_scale, input$normality_grouping)
+    req(input$plot_hover, processed_data(), current_page(), shapiro_data_stored(), input$normality_sort,  input$normality_norm, input$normality_trans, input$normality_scale, input$normality_grouping)
     hover <- input$plot_hover
     shapiro_data <- shapiro_data_stored()
     plot_data <- shapiro_data %>%
       dplyr::select(6:ncol(.))
 
-    items_per_page <- 50
+    groups_names <- get_group_info(names(processed_data())[-1])
+    num_gr <- length(unique(groups_names))
+
+    if (nrow(processed_data()) < 50 && input$normality_grouping == "whole data") {
+      items_per_page <- nrow(processed_data())
+    } else if (nrow(processed_data()) < 50 && input$normality_grouping == "grouped data") {
+      items_per_page <- nrow(processed_data())*num_gr
+    } else {
+      items_per_page <- 50
+    }
+
     page_offset <- (current_page() - 1) * items_per_page
     index_on_page <- items_per_page - round(hover$y) + 1
     index <- page_offset + index_on_page
@@ -3801,13 +3815,18 @@ server <- function(input, output, session) {
   # })
 
   output$hover_beanplot <- renderPlot({
-    req(input$levene_hover, levene_data_stored(), leve_current_page(), processed_data(), input$homoscedas_norm, input$homoscedas_trans, input$homoscedas_scale, input$homoscedas_sort)
+    req(input$levene_hover, processed_data(), levene_data_stored(), leve_current_page(), processed_data(), input$homoscedas_norm, input$homoscedas_trans, input$homoscedas_scale, input$homoscedas_sort)
     hover <- input$levene_hover
     levene_data <- levene_data_stored()
     plot_data <- levene_data %>%
       dplyr::select(Compound, 6:ncol(.))
 
-    items_per_page <- 50
+    if (nrow(processed_data()) < 50) {
+      items_per_page <- nrow(processed_data())
+    } else {
+      items_per_page <- 50
+    }
+
     page_offset <- (leve_current_page() - 1) * items_per_page
     index_on_page <- items_per_page - round(hover$y) + 1
     index <- page_offset + index_on_page
@@ -3845,8 +3864,6 @@ server <- function(input, output, session) {
       text(0.5, 0.5, "No measurements available", cex = 1.5)
     }
   })
-
-
 
 
   observe({
@@ -4013,6 +4030,15 @@ server <- function(input, output, session) {
 
   para_total_pages <- reactive(ceiling(nrow(processed_data()) / para_items_per_page))
 
+  last_page_nrow <- reactive({
+    total_rows <- nrow(processed_data())
+    rows_on_last_page <- total_rows %% para_items_per_page
+    if (rows_on_last_page == 0) {
+      rows_on_last_page <- para_items_per_page
+    }
+    rows_on_last_page
+  })
+
   observeEvent(input$para_prev_page, {
     para_current_page(max(1, para_current_page() - 1))
   })
@@ -4024,7 +4050,7 @@ server <- function(input, output, session) {
   })
 
   para_data_stored <- reactiveVal(NULL)
-
+  para_down <- reactiveVal(NULL)
 
   observe({
     if (!is.null(para_data_stored()) && active_tab() == "Parametric tests") {
@@ -4038,7 +4064,7 @@ server <- function(input, output, session) {
               paste0("metabo_parametric_", current_datetime, ".csv")
             },
             content = function(file) {
-              write.csv(para_data_stored(), file)
+              write.csv(para_down(), file)
             }
           ))
       })
@@ -4226,13 +4252,13 @@ server <- function(input, output, session) {
         tukey_results_list[[compound]] <- tukey_result
       }
 
-    tukey_results_df <- process_tukey_results(tukey_results_list)
-    rownames(tukey_results_df) <- NULL
+      tukey_results_df <- process_tukey_results(tukey_results_list)
+      rownames(tukey_results_df) <- NULL
 
-    tukey_results_df <- tukey_results_df %>%
-      select(Compound, diff, lwr, upr, `p adj`, Comparison)
+      tukey_results_df <- tukey_results_df %>%
+        select(Compound, diff, lwr, upr, `p adj`, Comparison)
 
-    tukey_results_df_download(tukey_results_df)
+      tukey_results_df_download(tukey_results_df)
 
       tukey_summary_df <- tukey_results_df %>%
         group_by(Comparison) %>%
@@ -4245,7 +4271,7 @@ server <- function(input, output, session) {
           mean_p_adj = mean(`p adj`)
         )
 
-    tukey_summary_df_download(tukey_summary_df)
+      tukey_summary_df_download(tukey_summary_df)
     } else {
       tukey_results_list <- list()
     }
@@ -4279,6 +4305,11 @@ server <- function(input, output, session) {
 
     joined_data <- left_join(results_df, short_data, by = c("Compound" = common_column_value))
     para_data_stored(joined_data)
+
+    para_down_data <- joined_data %>%
+      dplyr::select(-Order, -Max_Order)
+
+    para_down(para_down_data)
 
     if (num_groups > 2) {
       para_title <- "ANOVA Test Results"
@@ -4325,7 +4356,20 @@ server <- function(input, output, session) {
     plot_data <- para_data %>%
       dplyr::select(Compound, 5:ncol(.))
 
-    para_items_per_page <- 50
+    # if (nrow(processed_data()) < 50) {
+    #   para_items_per_page <- nrow(processed_data())
+    # } else {
+    #   para_items_per_page <- 50
+    # }
+
+    if (nrow(processed_data()) >= 50 && para_current_page() == para_total_pages()) {
+      para_items_per_page <- last_page_nrow()
+    } else if (nrow(processed_data()) >= 50 && para_current_page() != para_total_pages()) {
+      para_items_per_page <- 50
+    } else if (nrow(processed_data()) < 50) {
+      para_items_per_page <- nrow(processed_data())
+    }
+
     page_offset <- (para_current_page() - 1) * para_items_per_page
     index_on_page <- para_items_per_page - round(hover$y) + 1
     index <- page_offset + index_on_page
@@ -4338,6 +4382,9 @@ server <- function(input, output, session) {
     long_data <- hovered_measurements %>%
       pivot_longer(cols = -1, names_to = "sample", values_to = "value") %>%
       separate(sample, into = c("group", "sample"), sep = "(?<=group\\d{1})_(?=\\w)")
+
+    mean_value <- mean(long_data$value, na.rm = TRUE)
+    long_data$value[is.nan(long_data$value)] <- mean_value
 
     if (!is.null(hovered_measurements) && length(hovered_measurements) > 0) {
       dummy <- long_data %>%
@@ -4408,12 +4455,12 @@ server <- function(input, output, session) {
   })
 
 
-    output$tukey_results_table <- DT::renderDT({
-      req(tukey_summary_df_download(), input$tukey_check)
-        DT::datatable(
-          tukey_summary_df_download(),
-          options = list(pageLength = 10, scrollX = TRUE))
-      })
+  output$tukey_results_table <- DT::renderDT({
+    req(tukey_summary_df_download(), input$tukey_check)
+    DT::datatable(
+      tukey_summary_df_download(),
+      options = list(pageLength = 10, scrollX = TRUE))
+  })
 
 
 
@@ -4445,7 +4492,20 @@ server <- function(input, output, session) {
         plot_data <- para_data %>%
           dplyr::select(Compound, 5:ncol(.))
 
-        para_items_per_page <- 50
+        # if (nrow(processed_data()) < 50) {
+        #   para_items_per_page <- nrow(processed_data())
+        # } else {
+        #   para_items_per_page <- 50
+        # }
+
+        if (nrow(processed_data()) >= 50 && para_current_page() == para_total_pages()) {
+          para_items_per_page <- last_page_nrow()
+        } else if (nrow(processed_data()) >= 50 && para_current_page() != para_total_pages()) {
+          para_items_per_page <- 50
+        } else if (nrow(processed_data()) < 50) {
+          para_items_per_page <- nrow(processed_data())
+        }
+
         page_offset <- (para_current_page() - 1) * para_items_per_page
         index_on_page <- para_items_per_page - round(hover$y) + 1
         index <- page_offset + index_on_page
@@ -4589,6 +4649,15 @@ server <- function(input, output, session) {
 
   non_para_total_pages <- reactive(ceiling(nrow(processed_data()) / non_para_items_per_page))
 
+  last_page_nrow <- reactive({
+    total_rows <- nrow(processed_data())
+    rows_on_last_page <- total_rows %% non_para_items_per_page
+    if (rows_on_last_page == 0) {
+      rows_on_last_page <- non_para_items_per_page
+    }
+    rows_on_last_page
+  })
+
   observeEvent(input$non_para_prev_page, {
     non_para_current_page(max(1, non_para_current_page() - 1))
   })
@@ -4600,6 +4669,7 @@ server <- function(input, output, session) {
   })
 
   non_para_data_stored <- reactiveVal(NULL)
+  non_para_down <- reactiveVal(NULL)
 
   observe({
     if (!is.null(non_para_data_stored()) && active_tab() == "Non-Parametric tests") {
@@ -4613,7 +4683,7 @@ server <- function(input, output, session) {
               paste0("metabo_non_parametric_", current_datetime, ".csv")
             },
             content = function(file) {
-              write.csv(non_para_data_stored(), file)
+              write.csv(non_para_down(), file)
             }
           ))
       })
@@ -4657,8 +4727,6 @@ server <- function(input, output, session) {
     short_data <- processed_data()
     original_order <- setNames(seq_along(short_data$Compound), short_data$Compound)
     common_column_value <- common_column()
-    #non_para_check <- input$non_para_select
-    #fdr <- input$fdr_check
 
     long_data <- short_data %>%
       pivot_longer(cols = -1, names_to = "sample", values_to = "value") %>%
@@ -4851,6 +4919,11 @@ server <- function(input, output, session) {
     joined_data <- left_join(results_df, short_data, by = c("Compound" = common_column_value))
     non_para_data_stored(joined_data)
 
+    non_para_down_data <- joined_data %>%
+      dplyr::select(-Order, -Max_Order)
+
+    non_para_down(non_para_down_data)
+
     if (num_groups > 2) {
       non_para_title <- "Kruskal-Wallis Test Results"
     } else {
@@ -4896,7 +4969,23 @@ server <- function(input, output, session) {
     plot_data <- non_para_data %>%
       dplyr::select(Compound, 5:ncol(.))
 
-    non_para_items_per_page <- 50
+    groups_names <- get_group_info(names(processed_data())[-1])
+    num_gr <- length(unique(groups_names))
+
+    # if (nrow(processed_data()) < 50) {
+    #   non_para_items_per_page <- nrow(processed_data())
+    # } else {
+    #   non_para_items_per_page <- 50
+    # }
+
+    if (nrow(processed_data()) >= 50 && non_para_current_page() == non_para_total_pages()) {
+      non_para_items_per_page <- last_page_nrow()
+    } else if (nrow(processed_data()) >= 50 && non_para_current_page() != non_para_total_pages()) {
+      non_para_items_per_page <- 50
+    } else if (nrow(processed_data()) < 50) {
+      non_para_items_per_page <- nrow(processed_data())
+    }
+
     page_offset <- (non_para_current_page() - 1) * non_para_items_per_page
     index_on_page <- non_para_items_per_page - round(hover$y) + 1
     index <- page_offset + index_on_page
@@ -4909,6 +4998,9 @@ server <- function(input, output, session) {
     long_data <- hovered_measurements %>%
       pivot_longer(cols = -1, names_to = "sample", values_to = "value") %>%
       separate(sample, into = c("group", "sample"), sep = "(?<=group\\d{1})_(?=\\w)")
+
+    mean_value <- mean(long_data$value, na.rm = TRUE)
+    long_data$value[is.nan(long_data$value)] <- mean_value
 
     if (!is.null(hovered_measurements) && length(hovered_measurements) > 0) {
       dummy <- long_data %>%
@@ -5012,7 +5104,20 @@ server <- function(input, output, session) {
         plot_data <- non_para_data %>%
           dplyr::select(Compound, 5:ncol(.))
 
-        para_items_per_page <- 50
+        # if (nrow(processed_data()) < 50) {
+        #   para_items_per_page <- nrow(processed_data())
+        # } else {
+        #   para_items_per_page <- 50
+        # }
+
+        if (nrow(processed_data()) >= 50 && non_para_current_page() == non_para_total_pages()) {
+          non_para_items_per_page <- last_page_nrow()
+        } else if (nrow(processed_data()) >= 50 && non_para_current_page() != non_para_total_pages()) {
+          non_para_items_per_page <- 50
+        } else if (nrow(processed_data()) < 50) {
+          non_para_items_per_page <- nrow(processed_data())
+        }
+
         page_offset <- (non_para_current_page() - 1) * para_items_per_page
         index_on_page <- para_items_per_page - round(hover$y) + 1
         index <- page_offset + index_on_page
@@ -5042,6 +5147,7 @@ server <- function(input, output, session) {
       })
     }
   })
+
   render_dynamic_tables()
 
 }
