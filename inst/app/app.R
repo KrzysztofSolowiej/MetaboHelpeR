@@ -158,7 +158,7 @@ ui <- fluidPage(
         #hover_histogram_container {
             position: absolute;
             top: 0px;
-            left: 700px;
+            right: 0px;
             width: 40%;
         }
         #plot_for_hover {
@@ -170,7 +170,7 @@ ui <- fluidPage(
         #hover_beanplot_container {
             position: absolute;
             top: 0px;
-            left: 700px;
+            right: 0px;
             width: 40%;
         }
         #levene_for_hover {
@@ -3058,9 +3058,6 @@ server <- function(input, output, session) {
     # })
 
 
-
-
-
 # Render Gini index plot
     processed_transposed_data <- reactive({
       req(processed_data())
@@ -3172,6 +3169,15 @@ server <- function(input, output, session) {
   items_per_page <- 50
 
   total_pages <- reactive(ceiling(nrow(shapiro_data_stored()) / items_per_page))
+
+  last_page_nrow <- reactive({
+    total_rows <- nrow(processed_data())
+    rows_on_last_page <- total_rows %% items_per_page
+    if (rows_on_last_page == 0) {
+      rows_on_last_page <- items_per_page
+    }
+    rows_on_last_page
+  })
 
   observeEvent(input$prev_page, {
     current_page(max(1, current_page() - 1))
@@ -3480,7 +3486,7 @@ server <- function(input, output, session) {
 
 
   output$hover_histogram <- renderPlot({
-    req(input$plot_hover, processed_data(), current_page(), shapiro_data_stored(), input$normality_sort,  input$normality_norm, input$normality_trans, input$normality_scale, input$normality_grouping)
+    req(input$plot_hover, processed_data(), current_page(), total_pages(), shapiro_data_stored(), input$normality_sort,  input$normality_norm, input$normality_trans, input$normality_scale, input$normality_grouping)
     hover <- input$plot_hover
     shapiro_data <- shapiro_data_stored()
     plot_data <- shapiro_data %>%
@@ -3489,15 +3495,29 @@ server <- function(input, output, session) {
     groups_names <- get_group_info(names(processed_data())[-1])
     num_gr <- length(unique(groups_names))
 
-    if (nrow(processed_data()) < 50 && input$normality_grouping == "whole data") {
+    if (nrow(processed_data()) >= 50 && current_page() == total_pages() && input$normality_grouping == "whole data") {
+      items_per_page <- last_page_nrow()
+    } else if (nrow(processed_data()) >= 50 && current_page() != total_pages() && input$normality_grouping == "whole data") {
+      items_per_page <- 50
+    } else if (nrow(processed_data()) < 50 && input$normality_grouping == "whole data") {
       items_per_page <- nrow(processed_data())
+    } else if (nrow(processed_data()) >= 50 && current_page() == total_pages() && input$normality_grouping == "grouped data") {
+      items_per_page <- (nrow(processed_data()) * num_gr) %% 50
+    } else if (nrow(processed_data()) >= 50 && current_page() != total_pages() && input$normality_grouping == "grouped data") {
+      items_per_page <- 50
     } else if (nrow(processed_data()) < 50 && input$normality_grouping == "grouped data") {
       items_per_page <- nrow(processed_data())*num_gr
-    } else {
-      items_per_page <- 50
     }
 
-    page_offset <- (current_page() - 1) * items_per_page
+    # if (nrow(processed_data()) < 50 && input$normality_grouping == "whole data") {
+    #   items_per_page <- nrow(processed_data())
+    # } else if (nrow(processed_data()) < 50 && input$normality_grouping == "grouped data") {
+    #   items_per_page <- nrow(processed_data())*num_gr
+    # } else {
+    #   items_per_page <- 50
+    # }
+
+    page_offset <- (current_page() - 1) * 50
     index_on_page <- items_per_page - round(hover$y) + 1
     index <- page_offset + index_on_page
 
@@ -3624,6 +3644,15 @@ server <- function(input, output, session) {
   leve_items_per_page <- 50
 
   leve_total_pages <- reactive(ceiling(nrow(processed_data()) / leve_items_per_page))
+
+  last_page_nrow <- reactive({
+    total_rows <- nrow(processed_data())
+    rows_on_last_page <- total_rows %% leve_items_per_page
+    if (rows_on_last_page == 0) {
+      rows_on_last_page <- leve_items_per_page
+    }
+    rows_on_last_page
+  })
 
   observeEvent(input$leve_prev_page, {
     leve_current_page(max(1, leve_current_page() - 1))
@@ -3815,19 +3844,28 @@ server <- function(input, output, session) {
   # })
 
   output$hover_beanplot <- renderPlot({
-    req(input$levene_hover, processed_data(), levene_data_stored(), leve_current_page(), processed_data(), input$homoscedas_norm, input$homoscedas_trans, input$homoscedas_scale, input$homoscedas_sort)
+    req(input$levene_hover, processed_data(), levene_data_stored(), leve_current_page(), leve_total_pages(), processed_data(), input$homoscedas_norm, input$homoscedas_trans, input$homoscedas_scale, input$homoscedas_sort)
     hover <- input$levene_hover
     levene_data <- levene_data_stored()
     plot_data <- levene_data %>%
       dplyr::select(Compound, 6:ncol(.))
 
-    if (nrow(processed_data()) < 50) {
-      items_per_page <- nrow(processed_data())
-    } else {
+    # if (nrow(processed_data()) < 50) {
+    #   items_per_page <- nrow(processed_data())
+    # } else {
+    #   items_per_page <- 50
+    # }
+
+    if (nrow(processed_data()) >= 50 && leve_current_page() == leve_total_pages()) {
+      items_per_page <- last_page_nrow()
+    } else if (nrow(processed_data()) >= 50 && leve_current_page() != leve_total_pages()) {
       items_per_page <- 50
+    } else if (nrow(processed_data()) < 50) {
+      items_per_page <- nrow(processed_data())
     }
 
-    page_offset <- (leve_current_page() - 1) * items_per_page
+    page_offset <- (leve_current_page() - 1) * 50
+
     index_on_page <- items_per_page - round(hover$y) + 1
     index <- page_offset + index_on_page
     if (index < 1 || index > nrow(levene_data)) return()
@@ -4108,8 +4146,6 @@ server <- function(input, output, session) {
     short_data <- processed_data()
     original_order <- setNames(seq_along(short_data$Compound), short_data$Compound)
     common_column_value <- common_column()
-    #para_check <- input$para_select
-    #fdr <- input$fdr_check
 
     long_data <- short_data %>%
       pivot_longer(cols = -1, names_to = "sample", values_to = "value") %>%
@@ -4303,6 +4339,8 @@ server <- function(input, output, session) {
     end <- min(nrow(results_df), para_current_page() * para_items_per_page)
     display_data <- results_df[start:end, ]
 
+    print(display_data)
+
     joined_data <- left_join(results_df, short_data, by = c("Compound" = common_column_value))
     para_data_stored(joined_data)
 
@@ -4356,12 +4394,6 @@ server <- function(input, output, session) {
     plot_data <- para_data %>%
       dplyr::select(Compound, 5:ncol(.))
 
-    # if (nrow(processed_data()) < 50) {
-    #   para_items_per_page <- nrow(processed_data())
-    # } else {
-    #   para_items_per_page <- 50
-    # }
-
     if (nrow(processed_data()) >= 50 && para_current_page() == para_total_pages()) {
       para_items_per_page <- last_page_nrow()
     } else if (nrow(processed_data()) >= 50 && para_current_page() != para_total_pages()) {
@@ -4370,9 +4402,11 @@ server <- function(input, output, session) {
       para_items_per_page <- nrow(processed_data())
     }
 
-    page_offset <- (para_current_page() - 1) * para_items_per_page
+    page_offset <- (para_current_page() - 1) * 50
     index_on_page <- para_items_per_page - round(hover$y) + 1
+
     index <- page_offset + index_on_page
+
     if (index < 1 || index > nrow(para_data)) return()
 
     hovered_compound <- para_data[index, "Compound"]
@@ -4492,12 +4526,6 @@ server <- function(input, output, session) {
         plot_data <- para_data %>%
           dplyr::select(Compound, 5:ncol(.))
 
-        # if (nrow(processed_data()) < 50) {
-        #   para_items_per_page <- nrow(processed_data())
-        # } else {
-        #   para_items_per_page <- 50
-        # }
-
         if (nrow(processed_data()) >= 50 && para_current_page() == para_total_pages()) {
           para_items_per_page <- last_page_nrow()
         } else if (nrow(processed_data()) >= 50 && para_current_page() != para_total_pages()) {
@@ -4506,7 +4534,7 @@ server <- function(input, output, session) {
           para_items_per_page <- nrow(processed_data())
         }
 
-        page_offset <- (para_current_page() - 1) * para_items_per_page
+        page_offset <- (para_current_page() - 1) * 50
         index_on_page <- para_items_per_page - round(hover$y) + 1
         index <- page_offset + index_on_page
         if (index < 1 || index > nrow(para_data)) return()
@@ -4972,12 +5000,6 @@ server <- function(input, output, session) {
     groups_names <- get_group_info(names(processed_data())[-1])
     num_gr <- length(unique(groups_names))
 
-    # if (nrow(processed_data()) < 50) {
-    #   non_para_items_per_page <- nrow(processed_data())
-    # } else {
-    #   non_para_items_per_page <- 50
-    # }
-
     if (nrow(processed_data()) >= 50 && non_para_current_page() == non_para_total_pages()) {
       non_para_items_per_page <- last_page_nrow()
     } else if (nrow(processed_data()) >= 50 && non_para_current_page() != non_para_total_pages()) {
@@ -4986,7 +5008,7 @@ server <- function(input, output, session) {
       non_para_items_per_page <- nrow(processed_data())
     }
 
-    page_offset <- (non_para_current_page() - 1) * non_para_items_per_page
+    page_offset <- (non_para_current_page() - 1) * 50
     index_on_page <- non_para_items_per_page - round(hover$y) + 1
     index <- page_offset + index_on_page
     if (index < 1 || index > nrow(non_para_data)) return()
@@ -5104,12 +5126,6 @@ server <- function(input, output, session) {
         plot_data <- non_para_data %>%
           dplyr::select(Compound, 5:ncol(.))
 
-        # if (nrow(processed_data()) < 50) {
-        #   para_items_per_page <- nrow(processed_data())
-        # } else {
-        #   para_items_per_page <- 50
-        # }
-
         if (nrow(processed_data()) >= 50 && non_para_current_page() == non_para_total_pages()) {
           non_para_items_per_page <- last_page_nrow()
         } else if (nrow(processed_data()) >= 50 && non_para_current_page() != non_para_total_pages()) {
@@ -5118,7 +5134,7 @@ server <- function(input, output, session) {
           non_para_items_per_page <- nrow(processed_data())
         }
 
-        page_offset <- (non_para_current_page() - 1) * para_items_per_page
+        page_offset <- (non_para_current_page() - 1) * 50
         index_on_page <- para_items_per_page - round(hover$y) + 1
         index <- page_offset + index_on_page
         if (index < 1 || index > nrow(non_para_data)) return()
