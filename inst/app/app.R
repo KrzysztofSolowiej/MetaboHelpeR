@@ -104,6 +104,9 @@ ui <- fluidPage(
       uiOutput('sample_selector'),
       uiOutput('seed_setter'),
       uiOutput('tree_setter'),
+      verbatimTextOutput('oob_err'),
+      uiOutput('gini_download'),
+      uiOutput('mda_download'),
       #uiOutput('normality_button'),
       #uiOutput('vareq_button'),
       uiOutput('norm_group'),
@@ -288,8 +291,10 @@ ui <- fluidPage(
         tabPanel(id = 'gini', 'RF Gini',
                  withSpinner(plotly::plotlyOutput('gini_data')),
                  DT::DTOutput("conf_matrix"),
-                 DT::DTOutput("mean_dec_acc"),
-                 textOutput("oob_err")),
+                 withSpinner(plotly::plotlyOutput('mean_dec_acc')),
+                 #DT::DTOutput("mean_dec_acc"),
+                 #textOutput("oob_err")
+                 ),
         tabPanel(id = 'staty', 'Normality',
                  uiOutput("prev_page_button"),
                  uiOutput("next_page_button"),
@@ -3059,6 +3064,56 @@ server <- function(input, output, session) {
 
 
 # Render Gini index plot
+    gini_down <- reactiveVal(NULL)
+
+    observe({
+      if (!is.null(gini_down()) && active_tab() == "RF Gini") {
+        output$gini_download <- renderUI({
+          tagList(
+            br(),
+            tags$p("Download Gini Index as data table"),
+            downloadHandler(
+              filename = function() {
+                current_datetime <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+                paste0("rf_gini_", current_datetime, ".csv")
+              },
+              content = function(file) {
+                write.csv(gini_down(), file)
+              }
+            ))
+        })
+      } else {
+        output$gini_download <- renderUI({
+          div()
+        })
+      }
+    })
+
+    mda_down <- reactiveVal(NULL)
+
+    observe({
+      if (!is.null(mda_down()) && active_tab() == "RF Gini") {
+        output$mda_download <- renderUI({
+          tagList(
+            br(),
+            tags$p("Download Mean Decrease Accuracy as data table"),
+            downloadHandler(
+              filename = function() {
+                current_datetime <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+                paste0("mda_", current_datetime, ".csv")
+              },
+              content = function(file) {
+                write.csv(mda_down(), file)
+              }
+            ))
+        })
+      } else {
+        output$mda_download <- renderUI({
+          div()
+        })
+      }
+    })
+
     processed_transposed_data <- reactive({
       req(processed_data())
       gini_data <- processed_data()
@@ -3105,16 +3160,35 @@ server <- function(input, output, session) {
 
       results <- data.frame(Gini=sort(importance(model, type=2)[,], decreasing=T))
       results <- data.frame(Compound = rownames(results), results, row.names = NULL)
-      top_results <- head(results, 30)
 
-      mapped_names <- sapply(as.character(top_results$Compound), function(x) inverted_name_mapping[x])
-      top_results$Compound <- mapped_names
+      # mapped_names <- sapply(as.character(top_results$Compound), function(x) inverted_name_mapping[x])
+      # top_results$Compound <- mapped_names
+
+      adjusted_name_mapping <- setNames(inverted_name_mapping, gsub("-", "_", names(inverted_name_mapping)))
+
+      mapped_names <- sapply(as.character(results$Compound), function(x) {
+        if (!is.na(adjusted_name_mapping[x])) {
+          return(adjusted_name_mapping[x])
+        } else {
+          return(x)
+        }
+      })
+
+      results$Compound <- mapped_names
+      results$Compound <- gsub("^X", "", results$Compound)
+      gini_down(results)
+
+      if (nrow(processed_data()) < 30) {
+        top_results <- results
+      } else {
+        top_results <- head(results, 30)
+      }
 
       plot <- ggplot(top_results, aes(x = reorder(Compound, Gini), y = Gini)) +
         geom_segment(aes(x = Compound, xend = Compound, y = 0, yend = Gini), color = "skyblue") +
         geom_point(aes(color = "skyblue"), size = 2) +
         coord_flip() +
-        labs(x = "Compounds", y = "Gini Index") +
+        labs(x = "Compounds", y = "Gini Index", title = "Random Forest Gini Index") +
         theme_minimal() +
         theme(legend.position = "none")
 
@@ -3136,22 +3210,72 @@ server <- function(input, output, session) {
     inverted_name_mapping <- processed_transposed_data()$inverted_name_mapping
     mda_data <- data.frame(mean_decrease_acc = sort(importance(trained_model()$model, type=1)[,], decreasing=T))
     mda_data <- data.frame(Names = rownames(mda_data), mda_data, row.names = NULL)
-    mapped_names <- sapply(as.character(mda_data$Names), function(x) inverted_name_mapping[x])
+    #mapped_names <- sapply(as.character(mda_data$Names), function(x) inverted_name_mapping[x])
+    adjusted_name_mapping <- setNames(inverted_name_mapping, gsub("-", "_", names(inverted_name_mapping)))
+    mapped_names <- sapply(as.character(mda_data$Names), function(x) {
+      if (!is.na(adjusted_name_mapping[x])) {
+        return(adjusted_name_mapping[x])
+      } else {
+        #print(paste("No mapping found for:", x))
+        return(x)
+      }
+    })
     mda_data$Names <- mapped_names
+    mda_data$Names <- gsub("^X", "", mda_data$Names)
+    mda_down(mda_data)
     mda_data
   })
 
-  output$mean_dec_acc <- DT::renderDT({
-    req(trained_model())
-    DT::datatable(
-      m_d_a()
-    )
+  # output$mean_dec_acc <- DT::renderDT({
+  #   req(trained_model())
+  #   DT::datatable(
+  #     m_d_a()
+  #   )
+  # })
+
+  output$mean_dec_acc <- renderPlotly({
+    req(trained_model(), m_d_a())
+    mda_data <- m_d_a()
+    print(mda_data)
+    if (nrow(mda_data) > 30) {
+      positive_mda <- mda_data[mda_data$mean_decrease_acc > 0, ]
+      negative_mda <- mda_data[mda_data$mean_decrease_acc < 0, ]
+      positive_mda <- head(positive_mda[order(-positive_mda$mean_decrease_acc), ], 15)
+      negative_mda <- head(negative_mda[order(negative_mda$mean_decrease_acc), ], 15)
+      mda_data <- rbind(positive_mda, negative_mda)
+      mda_title <- "Top 15 Positive & Negative Variable Importance (Mean Decrease Accuracy)"
+    } else {
+      mda_data <- mda_data
+      mda_title <- "Variable Importance (Mean Decrease Accuracy)"
+    }
+
+    plot <- ggplot(mda_data, aes(x = reorder(Names, mean_decrease_acc), y = mean_decrease_acc)) +
+      geom_segment(aes(x = Names, xend = Names, y = 0, yend = mean_decrease_acc), color = "skyblue") +
+      geom_point(aes(color = "skyblue"), size = 2) +
+      coord_flip() +
+      labs(x = "Variables", y = "Mean Decrease Accuracy", title = mda_title) +
+      theme_minimal() +
+      theme(legend.position = "none")
+
+    ggplotly(plot, height = 400)
   })
 
+  # output$oob_err <- renderText({
+  #   req(trained_model())
+  #   paste("Out-of-bag error rate:", trained_model()$model$err.rate[nrow(trained_model()$model$err.rate), "OOB"])
+  # })
 
-  output$oob_err <- renderText({
-    req(trained_model())
-    paste("Out-of-bag error rate:", trained_model()$model$err.rate[nrow(trained_model()$model$err.rate), "OOB"])
+  observe({
+    if (!is.null(processed_data()) && active_tab() == "RF Gini") {
+      output$oob_err <- renderText({
+        req(trained_model())
+        paste("Out-of-bag error rate:", trained_model()$model$err.rate[nrow(trained_model()$model$err.rate), "OOB"])
+      })
+    } else {
+      output$oob_err <- renderText({
+        ""
+      })
+    }
   })
 
   quantile_normalize <- function(df) {
