@@ -2676,7 +2676,7 @@ server <- function(input, output, session) {
 
   plot_pca <- reactive({
     tryCatch({
-    req(input$pca_dropdown, input$criterion_dropdown, processed_data(), input$pca_dropdown, input$method_dropdown, input$distance_dropdown)
+    req(input$pca_dropdown, input$criterion_dropdown, processed_data(), input$method_dropdown, input$distance_dropdown)
     data_df_stats <- req(processed_data_with_stats())
     pca_type <- input$pca_dropdown
     pca_crit <- input$criterion_dropdown
@@ -2689,12 +2689,16 @@ server <- function(input, output, session) {
     out_method <- input$method_dropdown
     out_distance <- input$distance_dropdown
 
+    if (is.null(pca_compounds) || length(pca_compounds) == 0) {
+      pca_compounds <- unique(processed_data()[[common_column()]])
+    }
+
     real_data_merged <- processed_data()
 
-    filtered_data <- processed_data() %>%
-      filter(.data[[common_column()]] %in% pca_compounds)
-
-    if (nrow(filtered_data) == 0) {
+    if (nrow(processed_data()) < 30) {
+      filtered_data <- processed_data() %>%
+        filter(.data[[common_column()]] %in% pca_compounds)
+    } else {
       filtered_data <- real_data_merged
     }
 
@@ -2728,10 +2732,11 @@ server <- function(input, output, session) {
     filt_data_imputed <- rbind(new_row, filt_data_imputed)
 
     trans_data <- t(filt_data_imputed)
-
     new_names <- t(filt_data_imputed[,1])
+
     rownames(trans_data) <- colnames(filt_data_imputed)
     colnames(trans_data) <- new_names
+
     trans_data <- trans_data[-1,-1]
     trans_dat <- trans_data
     rownames(trans_dat) <- NULL
@@ -2904,6 +2909,11 @@ server <- function(input, output, session) {
       Sample = rownames(trans_data)[sample_outliers]
       )
 
+    data_df_stats <- data_df_stats %>%
+      mutate(
+        Combined_Score = coalesce(Combined_Score, 0)
+      )
+
     int_threshold <- quantile(data_df_stats$Combined_Score, 0.99)
     point_of_int <- data_df_stats %>%
       filter(Combined_Score > int_threshold)
@@ -2927,7 +2937,7 @@ server <- function(input, output, session) {
         if (inherits(plot, "try-error")) {
           stop("Computation failed. Please check your data.")
         }
-        if (input$interest_check) {
+        if (isTRUE(input$interest_check)) {
           plot <- plot +
             geom_point(data = interesting_points, aes(x = PC1, y = PC2), color = "#19a8c5", size = 1)
         }
