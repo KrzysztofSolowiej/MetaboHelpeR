@@ -46,6 +46,7 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       uiOutput('file_input'),
+      uiOutput("loaded_file_info"),
       actionButton("discard_data", "Discard Uploaded Data"),
       uiOutput('custom_title'),
       #uiOutput('transpose_button'),
@@ -262,6 +263,9 @@ ui <- fluidPage(
                  div(id = "spinner", class = "loader", style = "display:none;"),
                  # DT::DTOutput("duplicate_info"),
                  # DT::DTOutput("adduct_info"),
+                 bsModal("sheetModal", "Select Excel Sheet", "showModalBtn", size = "small",
+                         selectInput("sheet_choice", "Choose a sheet:", choices = NULL),
+                         actionButton("load_sheet", "Load Selected Sheet")),
                  bsModal("anomalyModal", "Anomaly Information", "anomalies_button", size = "large",
                          DT::DTOutput("anomaly_info")),
                  bsModal("mergeModal", "Merge Compounds", "adduct_merge", size = "large",
@@ -351,8 +355,10 @@ ui <- fluidPage(
 server <- function(input, output, session) {
 
   my_data <- reactiveVal(NULL)
+  sheet_name <- reactiveVal(NULL)
   updated_data <- reactiveVal(NULL)
   transposed_table_stored <- reactiveVal(NULL)
+  top_compounds_reactive <- reactiveVal(NULL)
   processed_data_with_stats <- reactiveVal(NULL)
 
   observe({
@@ -384,15 +390,18 @@ server <- function(input, output, session) {
     if (!is.null(data_df)) {
       common_column(names(data_df)[1])
     }
-    #print(paste("Common column:", common_column()))
   })
 
-  read_my_data <- function(file_path) {
+  read_my_data <- function(file_path, sheet = NULL) {
     extension <- tools::file_ext(file_path)
     if (extension %in% c("csv", "txt")) {
       data <- readr::read_delim(file_path, show_col_types = FALSE)
     } else if (extension %in% c("xls", "xlsx")) {
-      data <- readxl::read_excel(file_path)
+      if (is.null(sheet)) {
+        data <- readxl::read_excel(file_path)
+      } else {
+        data <- readxl::read_excel(file_path, sheet = sheet)
+      }
     } else {
       warning("Unsupported file type. Please upload CSV or Excel files.")
       return(NULL)
@@ -424,16 +433,74 @@ server <- function(input, output, session) {
     }
   })
 
+  output$loaded_file_info <- renderUI({
+    req(input$users_path)
+    file_name <- input$users_path$name
+    sheet <- sheet_name()
+
+    if (is.null(sheet)) {
+      div(
+        tagList(
+          HTML(paste0("Loaded file: ", file_name)),
+          br(),
+          br()
+        )
+      )
+    } else {
+      div(
+        tagList(
+          HTML(paste0("Loaded file: ", file_name, "<br>Sheet: ", sheet)),
+          br(),
+          br()
+        )
+      )
+    }
+  })
+
+
   observeEvent(input$users_path, {
     req(input$users_path)
     file_path <- input$users_path$datapath
-    data <- read_my_data(file_path)
-    if (!is.null(data)) {
-      my_data(data)
+    extension <- tools::file_ext(file_path)
+    if (extension %in% c("xls", "xlsx")) {
+      sheet_names <- excel_sheets(file_path)
+      if (length(sheet_names) > 1) {
+        updateSelectInput(session, "sheet_choice", choices = sheet_names)
+        showModal(modalDialog(
+          title = "Select a sheet",
+          selectInput("sheet_choice", "Choose a sheet:", choices = sheet_names),
+          actionButton("load_sheet", "Load Selected Sheet"),
+          footer = NULL
+        ))
+      } else {
+        data <- read_my_data(file_path)
+        my_data(data)
+        sheet_name(NULL)
+      }
     } else {
-      my_data(NULL)
+      data <- read_my_data(file_path)
+      my_data(data)
+      sheet_name(NULL)
     }
   })
+
+
+  observeEvent(input$load_sheet, {
+    req(input$sheet_choice)
+    file_path <- input$users_path$datapath
+    data <- read_my_data(file_path, sheet = input$sheet_choice)
+    my_data(data)
+    sheet_name(input$sheet_choice)
+    removeModal()
+  })
+
+  # observeEvent(input$load_sheet, {
+  #   req(input$sheet_choice)
+  #   file_path <- input$users_path$datapath
+  #   data <- read_my_data(file_path, sheet = input$sheet_choice)
+  #   my_data(data)
+  #   removeModal()
+  # })
 
   observeEvent(input$load_example_data, {
     example_file_path <- system.file("extdata", "example_data.csv", package = "MetaboHelpeR")
@@ -445,14 +512,11 @@ server <- function(input, output, session) {
     }
   })
 
+
 # Store groups logic -------------------
 
   group_counter <- reactiveVal(1)
   selected_columns_by_group <- reactiveVal(list())
-
-  # observe({
-  #   print(selected_columns_by_group())
-  # })
 
   # Function to render store button for each group
   render_store_button <- function(group_num) {
@@ -705,7 +769,7 @@ server <- function(input, output, session) {
   observeEvent(input$check_duplicates, {
     req(updated_data())
 
-    loading_id <- showNotification("Checking for duplicates/adducts...", duration = NULL, closeButton = FALSE)
+    loading_id <- showNotification("Checking for duplicates/adducts...", duration = NULL, type = "message", closeButton = FALSE)
     on.exit(removeNotification(loading_id), add = TRUE)
 
     data <- updated_data()
@@ -744,7 +808,7 @@ server <- function(input, output, session) {
             tagList(
               sliderInput(
                 'add_tol', 'Set tolerance for adduct searching:',
-                min = 0.00001, max = 0.001, value = 0.0001, step = 0.0001
+                min = 0.00001, max = 0.01, value = 0.0001, step = 0.0005
               )
             )
           )
@@ -763,7 +827,43 @@ server <- function(input, output, session) {
         div(
           class = "blue-container",
           tagList(
-            selectInput("adduct_type", "Search for adducts:", c("None", "Sodium (21.9819)", "Potasium (37.9559)"))
+            h4("Search for adducts"),
+            div(
+              style = "display: inline-block; width: 45%;",
+              selectInput("adduct_type", "Negative polarization",
+                          c("None",
+                            "HNO3 (16.9901)",
+                            "TFA or HCOONa (67.9874)",
+                            "methyl formate (60.0222)",
+                            "TFA*HCOONa (135.9748)",
+                            "Cl (10.0288)",
+                            "116.9282 ? (116.9282)",
+                            "116.9282*HCOONa (139.9174)",
+                            "174.9561 ? (129.9579)",
+                            "144.9228 ? (99.9222)",
+                            "212.9076 ? (167.9095)",
+                            "128.9599 ? (83.9526)",
+                            "102.9568 ? (57.9569)",
+                            "192.9274 ? (147.9300)",
+                            "HCOONax2 (135.9748)",
+                            "HCOONax3 (203.9622)",
+                            "NaCl (57.9586)",
+                            "129.9569 ? (129.9569)",
+                            "84.9765 ? (84.9765)")
+              )
+            ),
+            div(
+              style = "display: inline-block; width: 45%; margin-left: 10px;",
+              selectInput("adduct_type", "Positive polarization",
+                          c("None",
+                            "Sodium (21.9819)",
+                            "Potasium (37.9559)",
+                            "HCOONa (67.9874)",
+                            "167.9124 ? (167.9124)",
+                            "135.9798 ? (135.9798)",
+                            "139.9120 ? (139.9120)")
+              )
+            )
           )
         )
       })
@@ -773,6 +873,7 @@ server <- function(input, output, session) {
       })
     }
   })
+
 
   adduct_info_df <- reactiveVal(NULL)
 
@@ -788,7 +889,30 @@ server <- function(input, output, session) {
       adduct_mass_diff <- switch(input$adduct_type,
                                  "Sodium (21.9819)" = 21.9819,
                                  "Potasium (37.9559)" = 37.9559,
+                                 "HNO3 (16.9901)" = 16.9901,
+                                 "TFA or HCOONa (67.9874)" = 67.9874,
+                                 "methyl formate (60.0222)" = 60.0222,
+                                 "TFA*HCOONa (135.9748)" = 135.9748,
+                                 "Cl (10.0288)" = 10.0288,
+                                 "116.9282 ? (116.9282)" = 116.9282,
+                                 "116.9282*HCOONa (139.9174)" = 139.9174,
+                                 "174.9561 ? (129.9579)" = 129.9579,
+                                 "144.9228 ? (99.9222)" = 99.9222,
+                                 "212.9076 ? (167.9095)" = 167.9095,
+                                 "128.9599 ? (83.9526)" = 83.9526,
+                                 "102.9568 ? (57.9569)" = 57.9569,
+                                 "192.9274 ? (147.9300)" = 147.9300,
+                                 "HCOONax2 (135.9748)" = 135.9748,
+                                 "HCOONax3 (203.9622)" = 203.9622,
+                                 "NaCl (57.9586)" = 57.9586,
+                                 "129.9569 ? (129.9569)" = 129.9569,
+                                 "84.9765 ? (84.9765)" = 84.9765,
+                                 "HCOONa (67.9874)" = 67.9874,
+                                 "167.9124 ? (167.9124)" = 167.9124,
+                                 "135.9798 ? (135.9798)" = 135.9798,
+                                 "139.9120 ? (139.9120)" = 139.9120,
                                  "None" = NA)
+
 
       tolerance <- input$add_tol
 
@@ -796,10 +920,38 @@ server <- function(input, output, session) {
         mass_diff_matrix <- abs(outer(rv_data$New_Masses, rv_data$New_Masses, "-"))
         rt_diff_matrix <- abs(outer(rv_data$New_Retention_Time, rv_data$New_Retention_Time, "-"))
 
-        mass_diff_indices <- which(abs(mass_diff_matrix - adduct_mass_diff) < tolerance & rt_diff_matrix <= rt_threshold, arr.ind = TRUE)
-        selected_indices <- unique(c(mass_diff_indices[,1], mass_diff_indices[,2]))
-        data <- rv_data[selected_indices, ]
-        adduct_info_df(data)
+        mass_diff_indices <- which(abs(mass_diff_matrix - adduct_mass_diff) < tolerance &
+                                     rt_diff_matrix <= rt_threshold, arr.ind = TRUE)
+
+        # Check if mass_diff_indices has any rows
+        if (nrow(mass_diff_indices) > 0) {
+          selected_indices <- unique(c(mass_diff_indices[,1], mass_diff_indices[,2]))
+          data <- rv_data[selected_indices, ]
+
+          pairs <- rep(NA, nrow(rv_data))
+
+          pair_counter <- 1
+          for (i in 1:nrow(mass_diff_indices)) {
+            row1 <- mass_diff_indices[i, 1]
+            row2 <- mass_diff_indices[i, 2]
+            if (is.na(pairs[row1]) && is.na(pairs[row2])) {
+              pairs[row1] <- pair_counter
+              pairs[row2] <- pair_counter
+              pair_counter <- pair_counter + 1
+            }
+          }
+
+          rv_data$pairs <- pairs
+          rv_data <- rv_data[, c(1, ncol(rv_data), 2:(ncol(rv_data) - 1))]
+
+          data_with_pairs <- rv_data[!is.na(rv_data$pairs), ]
+
+          adduct_info_df(data_with_pairs)
+        } else {
+          # If no valid pairs found, set adduct_info_df to NULL
+          adduct_info_df(NULL)
+        }
+
         render_dynamic_tables()
       } else {
         adduct_info_df(NULL)
@@ -853,6 +1005,12 @@ server <- function(input, output, session) {
       selected_rows <- input$adduct_info_rows_selected
       if (length(selected_rows) > 1) {
         selected_data <- adduct_info_df()[selected_rows, ]
+
+        # Remove the "pairs" column if it exists in the data
+        if ("pairs" %in% colnames(selected_data)) {
+          selected_data <- selected_data[, !colnames(selected_data) %in% "pairs"]
+        }
+
         merge_name <- ifelse(input$custom_merge_name != "", input$custom_merge_name, input$merge_name)
 
         # Sum numerical values
@@ -905,7 +1063,7 @@ server <- function(input, output, session) {
   observe({
     if (!is.null(my_data()) && active_tab() == "Pre-process") {
       output$rt_threshold <- renderUI({
-        selectInput("rt_thresh", "Set RT threshold:", c("Exact", "0.001", "0.01", "0.1", "None"))
+        selectInput("rt_thresh", "Set RT threshold:", c("Exact", "0.01", "0.025", "0.05", "0.075", "0.1", "0.25", "0.5", "0.75", "1", "None"))
       })
     } else {
       output$rt_threshold <- renderUI({
@@ -2013,9 +2171,6 @@ server <- function(input, output, session) {
                                  ))
   })
 
-
-  top_compounds_reactive <- reactiveVal(NULL)
-
   # Render ranges plot
   plot_lineranges <- reactive({
     req(processed_data())
@@ -2499,7 +2654,6 @@ server <- function(input, output, session) {
         ungroup()
    }
 
-
     if(nrow(real_data_merged) < 30) {
       summary_data <- summary_data %>%
         filter(.data[[common_column()]] %in% input$compound_range)
@@ -2611,9 +2765,14 @@ server <- function(input, output, session) {
           mapped_names <- sapply(as.character(top_compounds[[common_column_value]]), function(x) inverted_name_mapping[x])
           top_compounds[[common_column_value]] <- mapped_names
         }
-
         top_compounds
       }
+
+      #top_compounds_reactive(req(top_compound_values))
+      print("top_compound_values")
+      print(top_compound_values)
+      print("top_compounds[[common_column_value]]")
+      print(top_compounds[[common_column_value]])
 
       top_compounds_reactive(top_compounds[[common_column_value]])
 
@@ -2621,6 +2780,7 @@ server <- function(input, output, session) {
         filter(.data[[common_column_value]] %in% top_compounds[[common_column_value]])
 
       dist_filtered_data <- dist_filtered_data[order(match(dist_filtered_data[[common_column()]], input$rank_list_top)), ]
+
       summary_data <- long_data %>%
         group_by(.data[[common_column()]], group) %>%
         ungroup() %>%
@@ -2631,8 +2791,9 @@ server <- function(input, output, session) {
     range_x_limits <- if (nrow(real_data_merged) < 30) {
       input$rank_list_basic
     } else {
-      input$rank_list_top
+      intersect(input$rank_list_top, top_compound_values)
     }
+
 
     if (type_check == "Violin") {
       plot <- ggplot(summary_data, aes(x = .data[[common_column()]], y = value)) +
@@ -3246,7 +3407,7 @@ server <- function(input, output, session) {
   output$mean_dec_acc <- renderPlotly({
     req(trained_model(), m_d_a())
     mda_data <- m_d_a()
-    print(mda_data)
+
     if (nrow(mda_data) > 30) {
       positive_mda <- mda_data[mda_data$mean_decrease_acc > 0, ]
       negative_mda <- mda_data[mda_data$mean_decrease_acc < 0, ]
@@ -4473,7 +4634,7 @@ server <- function(input, output, session) {
     end <- min(nrow(results_df), para_current_page() * para_items_per_page)
     display_data <- results_df[start:end, ]
 
-    print(display_data)
+    #print(display_data)
 
     joined_data <- left_join(results_df, short_data, by = c("Compound" = common_column_value))
     para_data_stored(joined_data)
