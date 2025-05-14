@@ -4,12 +4,41 @@
 #'     DO NOT REMOVE.
 #' @import shiny
 #' @noRd
+# app_ui <- function(request) {
+#   tagList(
+#     golem_add_external_resources(),
+#         fluidPage(
+#         titlePanel(title = span("MetaboHelpeR", style = "color: #0052cc; font-size: 55px; font-weight: bold; font-family: 'K2D';")),
+#         sidebarLayout(
+#           sidebarPanel(uiOutput("dynamic_sidebar"), width = 3),  # dynamically switch sidebar
+#           mainPanel(
+#             tabsetPanel(
+#               id = "main_tabs",
+#               tabPanel("Load Data", mod_data_loader_ui("loader")),
+#               tabPanel("Explore Data", mod_table_viewer_ui("viewer")),
+#               tabPanel("Show Ranges", mod_ranges_ui("viewer"))
+#             )
+#           )
+#         )
+#       )
+#
+#   )
+# }
 app_ui <- function(request) {
   tagList(
     golem_add_external_resources(),
     fluidPage(
       titlePanel(title = span("MetaboHelpeR", style = "color: #0052cc; font-size: 55px; font-weight: bold; font-family: 'K2D';")),
-      mod_data_loader_ui("loader")
+      sidebarLayout(
+        sidebarPanel(uiOutput("dynamic_sidebar"), width = 3),
+        mainPanel(
+          tabsetPanel(
+            id = "main_tabs",
+            tabPanel("Load Data", mod_data_loader_ui("loader"))
+            # DO NOT include Explore Data or Show Ranges here
+          )
+        )
+      )
     )
   )
 }

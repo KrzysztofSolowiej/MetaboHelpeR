@@ -267,7 +267,14 @@ mod_data_loader_server <- function(id) {
     output$group_metadata <- DT::renderDataTable({
       req(data_loader(), transpose_prompt_shown(), input$has_metadata, input$confirm_compound_col)
       df <- data_loader()$get_group_metadata_df()
-      DT::datatable(df, options = list(dom = 't'), rownames = FALSE)
+      DT::datatable(df,
+                    extensions = c('FixedColumns', 'ColReorder'),
+                    options = list(dom = 't',
+                                   ordering = FALSE,
+                                   scrollX = TRUE,
+                                   fixedColumns = list(leftColumns = 1, rightColumns = 0),
+                                   colReorder = TRUE),
+                    rownames = FALSE)
     })
 
     output$preview <- DT::renderDataTable({
@@ -276,12 +283,22 @@ mod_data_loader_server <- function(id) {
         req(input$confirm_compound_col)
       }
       df <- data_loader()$get_data_excl_metadata()
-      DT::datatable(df, options = list(pageLength = 10), rownames = TRUE)
+      DT::datatable(df,
+                    extensions = c('FixedColumns', 'ColReorder'),
+                    options = list(
+                      pageLength = 10,
+                      ordering = TRUE,
+                      scrollX = TRUE,
+                      fixedColumns = list(leftColumns = 2, rightColumns = 0),
+                      colReorder = TRUE),
+                    rownames = TRUE)
+
     })
 
     observeEvent(input$discard_data, {
       session$reload()
     })
 
+    return(reactive({ !is.null(data_loader()$get_data()) }))
   })
 }
