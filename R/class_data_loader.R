@@ -129,7 +129,27 @@ DataLoader <- R6::R6Class("DataLoader",
       info <- self$metadata_info
       if (is.null(info)) return(NULL)
       return(data.frame(df[info$index, , drop = TRUE]))
+    },
+
+    #' @description
+    #' Return numeric matrix of the data excluding metadata and compound column.
+    get_data_matrix = function() {
+      df <- self$get_data_excl_metadata()
+
+      # Remove compound column if defined
+      if (!is.null(self$compound_col) && self$compound_col %in% names(df)) {
+        df <- df[ , setdiff(names(df), self$compound_col), drop = FALSE]
+      }
+
+      # Coerce to matrix, ensuring numeric conversion
+      mat <- suppressWarnings({
+        as.matrix(sapply(df, function(col) as.numeric(as.character(col))))
+      })
+
+      storage.mode(mat) <- "numeric"
+      return(mat)
     }
+
 
 
   ),

@@ -48,6 +48,7 @@ or stores sheet names if multiple are found.
 \item \href{#method-DataLoader-get_metadata_info}{\code{DataLoader$get_metadata_info()}}
 \item \href{#method-DataLoader-get_data_excl_metadata}{\code{DataLoader$get_data_excl_metadata()}}
 \item \href{#method-DataLoader-get_group_metadata_df}{\code{DataLoader$get_group_metadata_df()}}
+\item \href{#method-DataLoader-get_data_matrix}{\code{DataLoader$get_data_matrix()}}
 \item \href{#method-DataLoader-clone}{\code{DataLoader$clone()}}
 }
 }
@@ -193,6 +194,16 @@ Return data without metadata.
 Return group metadata as a data frame (if applicable).
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_group_metadata_df()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-get_data_matrix"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-get_data_matrix}{}}}
+\subsection{Method \code{get_data_matrix()}}{
+Return numeric matrix of the data excluding metadata and compound column.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_data_matrix()}\if{html}{\out{</div>}}
 }
 
 }

@@ -7,17 +7,41 @@
 #' @noRd
 #'
 #' @importFrom shiny NS tagList
+# mod_data_loader_ui <- function(id) {
+#   ns <- NS(id)
+#   tagList(
+#     uiOutput(ns("file_input_ui")),
+#     actionButton(ns("load_example_button"), "Load Example Data"),
+#     conditionalPanel(
+#       condition = sprintf("input['%s'] == true", ns("has_metadata")),
+#       h4("Group Vector"),
+#       DT::dataTableOutput(ns("group_metadata"))
+#     ),
+#     h4("Data Preview"),
+#     DT::dataTableOutput(ns("preview"))
+#   )
+# }
 mod_data_loader_ui <- function(id) {
   ns <- NS(id)
-  tagList(
-    uiOutput(ns("file_input_ui")),
-    actionButton(ns("load_example_button"), "Load Example Data"),
-    conditionalPanel(
-      condition = sprintf("input['%s'] == true", ns("has_metadata")),
-      h4("Group Vector"),
-      DT::dataTableOutput(ns("group_metadata"))
-    ),
-    h4("Data Preview"),
-    DT::dataTableOutput(ns("preview"))
+
+  fluidPage(
+    sidebarLayout(
+      sidebarPanel(
+        uiOutput(ns("file_input_ui")),
+        actionButton(ns("load_example_button"), "Load Example Data"),
+        actionButton(ns("discard_data"), "Discard Uploaded Data"),
+        width = 3  # set sidebar width
+      ),
+      mainPanel(
+        conditionalPanel(
+          condition = sprintf("input['%s'] == true", ns("has_metadata")),
+          h4("Group Vector"),
+          DT::dataTableOutput(ns("group_metadata"))
+        ),
+        h4("Data Preview"),
+        DT::dataTableOutput(ns("preview")),
+        width = 9  # main panel width
+      )
+    )
   )
 }

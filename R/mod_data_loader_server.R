@@ -278,5 +278,10 @@ mod_data_loader_server <- function(id) {
       df <- data_loader()$get_data_excl_metadata()
       DT::datatable(df, options = list(pageLength = 10), rownames = TRUE)
     })
+
+    observeEvent(input$discard_data, {
+      session$reload()
+    })
+
   })
 }
