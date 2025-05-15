@@ -299,6 +299,10 @@ mod_data_loader_server <- function(id) {
       session$reload()
     })
 
-    return(reactive({ !is.null(data_loader()$get_data()) }))
+    return(list(
+      data_loader = data_loader,
+      data_loaded = reactive({ !is.null(data_loader()$get_data_excl_metadata()) })
+    ))
+
   })
 }

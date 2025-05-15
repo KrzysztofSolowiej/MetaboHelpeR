@@ -5,9 +5,10 @@
 #' @import shiny
 #' @noRd
 app_server <- function(input, output, session) {
-  data_loaded <- mod_data_loader_server("loader")
 
-  mod_table_viewer_server("viewer", data_loader)
+  loader <- mod_data_loader_server("loader")
+  mod_table_viewer_server("viewer", loader$data_loader)
+
   mod_ranges_server("ranges")
 
   tabs_inserted <- reactiveVal(FALSE)  # ← Track if we've already added the tabs
@@ -20,8 +21,8 @@ app_server <- function(input, output, session) {
     )
   })
 
-  observeEvent(data_loaded(), {
-    if (data_loaded() && !tabs_inserted()) {
+  observeEvent(loader$data_loaded(), {
+    if (loader$data_loaded() && !tabs_inserted()) {
       isolate({
         insertTab(
           inputId = "main_tabs",

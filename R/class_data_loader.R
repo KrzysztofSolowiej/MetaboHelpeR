@@ -94,12 +94,55 @@ DataLoader <- R6::R6Class("DataLoader",
     #' @param index Numeric, the metadata index number.
     set_metadata_info = function(index) {
       self$metadata_info <- list(index = index)
+
+      df <- self$get_data()
+      metadata_row <- df[index, , drop = TRUE]
+
+      # Store group labels
+      colnames_df <- names(metadata_row)
+      compound_col_name <- self$compound_col
+      compound_col_index <- which(colnames_df == compound_col_name)
+
+      # Exclude compound column safely
+      if (length(compound_col_index) == 1) {
+        group_vector <- as.character(unlist(metadata_row[-compound_col_index]))
+      } else {
+        warning("Compound column not found in metadata row; including all columns in group vector.")
+        group_vector <- as.character(unlist(metadata_row))
+      }
+
+      self$metadata_info$group_vector <- group_vector
+
+      # Extract group names and counts
+      unique_groups <- unique(group_vector)
+      self$metadata_info$unique_groups <- unique_groups
+      self$metadata_info$group_counts <- table(group_vector)
+      self$metadata_info$group_indices <- split(seq_along(group_vector), group_vector)
+
+      print("Group counts:")
+      print(self$metadata_info$group_counts)
     },
+
 
     #' @description
     #' Return metadata index
     get_metadata_info = function() {
+      if (is.null(self$metadata_info)) return(NULL)
       self$metadata_info
+    },
+
+    #' @description
+    #' Return group vector
+    get_group_vector = function() {
+      if (is.null(self$metadata_info)) return(NULL)
+      self$metadata_info$group_vector
+    },
+
+    #' @description
+    #' Return group indices
+    get_group_indices = function() {
+      if (is.null(self$metadata_info)) return(NULL)
+      self$metadata_info$group_indices
     },
 
     #' @description
@@ -149,8 +192,6 @@ DataLoader <- R6::R6Class("DataLoader",
       storage.mode(mat) <- "numeric"
       return(mat)
     }
-
-
 
   ),
 
