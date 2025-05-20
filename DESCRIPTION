@@ -9,11 +9,16 @@ Authors@R:
 Description: What the package does (one paragraph).
 License: What license is it under?
 Imports: 
+    colourpicker,
     config,
     dplyr,
     golem,
+    htmlwidgets,
     janitor,
-    shiny
+    jsonlite,
+    scales,
+    shiny,
+    sortable
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.2

@@ -1,3 +1,62 @@
+#' Create a Custom Shiny Modal with Adjustable Size and Class
+#'
+#' Found on https://stackoverflow.com/questions/63882483/how-to-adjust-shiny-modaldialog-width-to-a-dt-object-to-fully-show-the-table-i
+#'
+#' This utility function extends Shiny's modal dialog by allowing custom CSS classes
+#' to be added to the `modal-dialog` container, enabling precise control over styling
+#' (e.g., modal width). Use this instead of `modalDialog()` when you need more layout control.
+#'
+#' @param ... UI elements to include inside the modal body.
+#' @param title Title of the modal. Can be a character string or UI tag (e.g., `div(...)`).
+#' @param footer Footer content, typically buttons. Defaults to a dismiss button.
+#' @param size Modal size: one of `"s"`, `"m"`, or `"l"` (small, medium, large).
+#' @param easyClose Logical. If `TRUE`, modal can be closed by clicking outside or pressing ESC.
+#' @param fade Logical. If `TRUE`, modal fades in/out.
+#' @param idcss Optional custom CSS class to add to the `modal-dialog` element for fine-tuned styling.
+#'
+#' @return A modal dialog as a `shiny.tag` to be passed into `showModal()`.
+#'
+#' @examples
+#' showModal(
+#'   mymodal(
+#'     idcss = "wide-modal",
+#'     title = "Custom Modal",
+#'     div("Modal body content"),
+#'     footer = tagList(modalButton("Cancel"), actionButton("ok", "OK"))
+#'   )
+#' )
+#'
+#' @export
+mymodal <- function (..., title = NULL, footer = modalButton("Dismiss"),
+                     size = c("m", "s", "l"), easyClose = FALSE, fade = TRUE, idcss = "") {
+  size <- match.arg(size)
+  cls <- if (fade) "modal fade" else "modal"
+
+  div(
+    id = "shiny-modal",
+    class = cls,
+    tabindex = "-1",
+    `data-backdrop` = if (!easyClose) "static",
+    `data-keyboard` = if (!easyClose) "false",
+    div(
+      class = paste("modal-dialog", idcss),
+      class = switch(size,
+                     s = "modal-sm",
+                     m = NULL,
+                     l = "modal-lg"),
+      div(
+        class = "modal-content",
+        if (!is.null(title))
+          div(class = "modal-header", tags$h4(class = "modal-title", title)),
+        div(class = "modal-body", ...),
+        if (!is.null(footer))
+          div(class = "modal-footer", footer)
+      )
+    ),
+    tags$script("$('#shiny-modal').modal().focus();")
+  )
+}
+
 #' Transpose a data frame with proper row/column names
 #'
 #' @description A utils function

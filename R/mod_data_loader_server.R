@@ -129,6 +129,27 @@ mod_data_loader_server <- function(id) {
       df
     }, rownames = TRUE)
 
+    observeEvent(input$transpose_btn, {
+      req(data_loader())
+      transposed <- transpose_data(data_loader()$get_data())
+      data_loader()$data(transposed)
+      transpose_prompt_shown(TRUE)
+      removeModal()
+      if (!is_example_data()) {
+        show_compound_and_metadata_modal(names(transposed))
+      }
+    })
+
+    observeEvent(input$transpose_cancel, {
+      transpose_prompt_shown(TRUE)
+      removeModal()
+
+      df <- data_loader()$get_data()
+      if (!is_example_data()) {
+        show_compound_and_metadata_modal(names(df))
+      }
+    })
+
     show_compound_and_metadata_modal <- function(column_choices) {
       showModal(modalDialog(
         title = "Select Compound Column and Metadata",
@@ -151,15 +172,38 @@ mod_data_loader_server <- function(id) {
                 ",
               DT::dataTableOutput(ns("metadata_preview"))
             )
+          ),
+          conditionalPanel(
+            condition = sprintf("input['%s'] == false", ns("has_metadata")),
+            tagList(
+              numericInput(ns("num_groups"), "Number of Groups", value = 2, min = 2, max = 8, step = 1),
+              uiOutput(ns("custom_group_names_ui"))
+            )
           )
+
         ),
         footer = tagList(
           actionButton(ns("confirm_compound_col"), "Confirm"),
           modalButton("Cancel")
         ),
-        size = "l"
+        size = "m",
+        easyClose = FALSE
       ))
     }
+
+    observeEvent(input$num_groups, {
+      req(input$num_groups)
+      val <- input$num_groups
+
+      if (val < 2) {
+        updateNumericInput(session, "num_groups", value = 2)
+        showNotification("Minimum number of groups is 2.", type = "warning")
+      } else if (val > 8) {
+        updateNumericInput(session, "num_groups", value = 8)
+        showNotification("Maximum number of groups is 8.", type = "warning")
+      }
+    })
+
 
     output$metadata_preview <- DT::renderDataTable({
       req(data_loader(), data_loader()$get_data())
@@ -168,26 +212,21 @@ mod_data_loader_server <- function(id) {
       DT::datatable(df, selection = list(mode = "single", target = "row"), options = list(dom = 't'))
     })
 
-    observeEvent(input$transpose_btn, {
-      req(data_loader())
-      transposed <- transpose_data(data_loader()$get_data())
-      data_loader()$data(transposed)
-      transpose_prompt_shown(TRUE)
-      removeModal()
-      if (!is_example_data()) {
-        show_compound_and_metadata_modal(names(transposed))
-      }
+    output$custom_group_names_ui <- renderUI({
+      req(input$num_groups)
+
+      num_groups <- input$num_groups
+      palette_fn <- scales::hue_pal()
+      palette <- palette_fn(num_groups)
+
+      lapply(seq_len(num_groups), function(i) {
+        fluidRow(
+          column(6, textInput(ns(paste0("group_name_", i)), paste("Group", i, "name:"), value = paste("Group", LETTERS[i]))),
+          column(6, colourpicker::colourInput(ns(paste0("group_color_", i)), "Color", value = palette[i]))
+        )
+      })
     })
 
-    observeEvent(input$transpose_cancel, {
-      transpose_prompt_shown(TRUE)
-      removeModal()
-
-      df <- data_loader()$get_data()
-      if (!is_example_data()) {
-        show_compound_and_metadata_modal(names(df))
-      }
-    })
 
     observeEvent(input$confirm_compound_col, {
       loader <- data_loader()
@@ -205,10 +244,91 @@ mod_data_loader_server <- function(id) {
         )
       }
 
+      if (!isTRUE(input$has_metadata)) {
+        removeModal()
+        num_groups <- input$num_groups
+        group_names <- sapply(seq_len(num_groups), function(i) input[[paste0("group_name_", i)]])
+        show_manual_group_dnd_modal(loader, ns, group_names = group_names)
+        return()
+      }
+
       data_loader(loader)
       removeModal()
       non_numeric_cols_to_fix(check_and_handle_non_numeric(data_loader, ns))
     })
+
+    show_manual_group_dnd_modal <- function(loader, ns, group_names) {
+      df <- loader$get_data_excl_metadata()
+      sample_cols <- setdiff(names(df), loader$get_compound_col())
+
+      # Drag-and-drop buckets
+      rank_lists <- lapply(seq_along(group_names), function(i) {
+        labels <- if (i == 1) sample_cols else NULL
+        sortable::add_rank_list(group_names[i], input_id = ns(paste0("group_", i)), labels = labels)
+      })
+
+      # Add "Remove" and "Other" buckets
+      rank_lists <- append(rank_lists, list(
+        sortable::add_rank_list("Remove", input_id = ns("group_exclude"), labels = NULL),
+        sortable::add_rank_list("Other", input_id = ns("group_other"), labels = NULL)
+      ))
+
+      showModal(
+        mymodal(
+          idcss = "dnd-modal",  # applies to modal-dialog
+          title = div("Manually Assign Groups (Drag & Drop)", class = "dnd-modal-title"),
+          sortable::bucket_list(
+            header = "Drag sample names into group buckets below:",
+            group_name = "group_assign",
+            orientation = "horizontal",
+            !!!rank_lists
+          ),
+          footer = tagList(
+            actionButton(ns("confirm_manual_groups"), "Confirm"),
+            modalButton("Cancel")
+          ),
+          easyClose = FALSE
+        )
+      )
+    }
+
+  observeEvent(input$confirm_manual_groups, {
+    loader <- data_loader()
+    num_groups <- input$num_groups
+
+    # Retrieve custom group names and colors
+    custom_group_names <- sapply(seq_len(num_groups), function(i) input[[paste0("group_name_", i)]])
+    custom_group_colors <- sapply(seq_len(num_groups), function(i) input[[paste0("group_color_", i)]])
+    names(custom_group_colors) <- custom_group_names
+
+    group_inputs <- setNames(
+      lapply(seq_len(num_groups), function(i) input[[paste0("group_", i)]]),
+      custom_group_names
+    )
+
+    # Store excluded samples if needed
+    excluded_samples <- input$group_exclude
+
+    # Build group mapping without "Remove"
+    sample_to_group <- unlist(lapply(names(group_inputs), function(g) {
+      samples <- group_inputs[[g]]
+      if (!is.null(samples)) {
+        setNames(rep(g, length(samples)), samples)
+      }
+    }))
+
+    # Filter data to exclude "Remove" samples
+    df <- loader$get_data()
+    df <- df[, setdiff(names(df), excluded_samples)]
+    loader$set_data(df)
+
+    loader$set_manual_group_mapping(sample_to_group, group_colors = custom_group_colors)
+    data_loader(loader)
+    removeModal()
+
+    non_numeric_cols_to_fix(check_and_handle_non_numeric(data_loader, ns))
+  })
+
 
     observeEvent(input$apply_column_fixes, {
       df <- data_loader()$get_data()
@@ -252,6 +372,7 @@ mod_data_loader_server <- function(id) {
       data_loader()$set_data(df)
       print(sum(is.na(data_loader()$get_data())))
       removeModal()
+
     })
 
     observeEvent(input$load_example_button, {

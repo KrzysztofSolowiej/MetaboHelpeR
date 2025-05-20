@@ -103,26 +103,30 @@ DataLoader <- R6::R6Class("DataLoader",
       compound_col_name <- self$compound_col
       compound_col_index <- which(colnames_df == compound_col_name)
 
-      # Exclude compound column safely
+      # Exclude compound column safely and preserve names
       if (length(compound_col_index) == 1) {
-        group_vector <- as.character(unlist(metadata_row[-compound_col_index]))
+        group_vector <- metadata_row[-compound_col_index]
+        group_vector <- as.character(group_vector)
+        names(group_vector) <- names(metadata_row)[-compound_col_index]
       } else {
         warning("Compound column not found in metadata row; including all columns in group vector.")
-        group_vector <- as.character(unlist(metadata_row))
+        group_vector <- as.character(metadata_row)
+        names(group_vector) <- names(metadata_row)
       }
 
       self$metadata_info$group_vector <- group_vector
 
       # Extract group names and counts
       unique_groups <- unique(group_vector)
+
       self$metadata_info$unique_groups <- unique_groups
       self$metadata_info$group_counts <- table(group_vector)
-      self$metadata_info$group_indices <- split(seq_along(group_vector), group_vector)
-
-      print("Group counts:")
-      print(self$metadata_info$group_counts)
+      self$metadata_info$group_indices <- lapply(split(seq_along(group_vector), group_vector), function(idxs) idxs + 1)
+      self$metadata_info$group_colors <- setNames(
+        scales::hue_pal()(length(unique_groups)),
+        unique_groups
+      )
     },
-
 
     #' @description
     #' Return metadata index
@@ -146,12 +150,21 @@ DataLoader <- R6::R6Class("DataLoader",
     },
 
     #' @description
+    #' Return group colors
+    get_group_colors = function() {
+      if (is.null(self$metadata_info)) return(NULL)
+      self$metadata_info$group_colors
+    },
+
+    #' @description
     #' Return data without metadata.
     get_data_excl_metadata = function() {
       df <- self$get_data()
       if (is.null(self$metadata_info)) return(df)
 
-      df <- df[-self$metadata_info$index, , drop = FALSE]
+      if (!is.null(self$metadata_info$index)) {
+        df <- df[-self$metadata_info$index, , drop = FALSE]
+      }
 
       # Try to convert all columns to numeric where possible
       df[] <- lapply(df, function(col) {
@@ -173,6 +186,36 @@ DataLoader <- R6::R6Class("DataLoader",
       if (is.null(info)) return(NULL)
       return(data.frame(df[info$index, , drop = TRUE]))
     },
+
+    #' @description
+    #' Set group metadata based on manual assignment
+    #' @param sample_to_group A named character vector where names are sample column names, and values are group names
+    #' @param group_colors A color vector
+    set_manual_group_mapping = function(sample_to_group, group_colors = NULL) {
+      self$metadata_info <- list(index = NULL)
+
+      group_vector <- sample_to_group
+      sample_names <- names(group_vector)
+
+      if (!is.null(self$compound_col)) {
+        group_vector <- group_vector[sample_names != self$compound_col]
+      }
+
+      self$metadata_info$group_vector <- group_vector
+      self$metadata_info$unique_groups <- unique(group_vector)
+      self$metadata_info$group_counts <- table(group_vector)
+
+      # Convert sample names to column indices for group_indices
+      col_indices <- match(names(group_vector), names(self$get_data()))
+      self$metadata_info$group_indices <- split(col_indices, group_vector)
+
+      self$metadata_info$group_colors <- if (!is.null(group_colors)) {
+        group_colors
+      } else {
+        setNames(scales::hue_pal()(length(unique(group_vector))), unique(group_vector))
+      }
+    },
+
 
     #' @description
     #' Return numeric matrix of the data excluding metadata and compound column.

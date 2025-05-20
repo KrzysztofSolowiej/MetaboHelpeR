@@ -48,8 +48,10 @@ or stores sheet names if multiple are found.
 \item \href{#method-DataLoader-get_metadata_info}{\code{DataLoader$get_metadata_info()}}
 \item \href{#method-DataLoader-get_group_vector}{\code{DataLoader$get_group_vector()}}
 \item \href{#method-DataLoader-get_group_indices}{\code{DataLoader$get_group_indices()}}
+\item \href{#method-DataLoader-get_group_colors}{\code{DataLoader$get_group_colors()}}
 \item \href{#method-DataLoader-get_data_excl_metadata}{\code{DataLoader$get_data_excl_metadata()}}
 \item \href{#method-DataLoader-get_group_metadata_df}{\code{DataLoader$get_group_metadata_df()}}
+\item \href{#method-DataLoader-set_manual_group_mapping}{\code{DataLoader$set_manual_group_mapping()}}
 \item \href{#method-DataLoader-get_data_matrix}{\code{DataLoader$get_data_matrix()}}
 \item \href{#method-DataLoader-clone}{\code{DataLoader$clone()}}
 }
@@ -200,6 +202,16 @@ Return group indices
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-get_group_colors"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-get_group_colors}{}}}
+\subsection{Method \code{get_group_colors()}}{
+Return group colors
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_group_colors()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-DataLoader-get_data_excl_metadata"></a>}}
 \if{latex}{\out{\hypertarget{method-DataLoader-get_data_excl_metadata}{}}}
 \subsection{Method \code{get_data_excl_metadata()}}{
@@ -218,6 +230,25 @@ Return group metadata as a data frame (if applicable).
 \if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_group_metadata_df()}\if{html}{\out{</div>}}
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-set_manual_group_mapping"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-set_manual_group_mapping}{}}}
+\subsection{Method \code{set_manual_group_mapping()}}{
+Set group metadata based on manual assignment
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$set_manual_group_mapping(sample_to_group, group_colors = NULL)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{sample_to_group}}{A named character vector where names are sample column names, and values are group names}
+
+\item{\code{group_colors}}{A color vector}
+}
+\if{html}{\out{</div>}}
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-DataLoader-get_data_matrix"></a>}}

@@ -1,0 +1,20 @@
+@font-face {
+  font-family: 'Literata';
+  src: url('fonts/Literata-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* Apply font to titlePanel span */
+.title-font {
+  font-family: 'Literata', sans-serif !important;
+  color: #581845;
+  font-size: 50px;
+  font-weight: normal;
+}
+
+/* Apply modal features */
+.modal-dialog.dnd-modal {
+  width: 95% !important;
+  max-width: 1800px !important;
+}
