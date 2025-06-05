@@ -12,12 +12,16 @@ Imports:
     colourpicker,
     config,
     dplyr,
+    forcats,
     golem,
     htmlwidgets,
     janitor,
     jsonlite,
+    plotly,
+    purrr,
     scales,
     shiny,
+    shinyjs,
     sortable
 Encoding: UTF-8
 LazyData: true

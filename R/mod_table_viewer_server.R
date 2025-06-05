@@ -14,6 +14,7 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
       group_vector <- data_loaded$get_group_vector()
       group_indices <- data_loaded$get_group_indices()
       group_names <- names(group_indices)
+      other_samples <- data_loaded$get_other_samples()
       group_colors <- data_loaded$get_group_colors()
 
       print("Metadata checkup")
@@ -31,14 +32,15 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
         }
       }
 
-      print("group_labels")
-      print(group_labels)
-      print("colnames_data")
-      print(colnames_data)
-
       display_colnames <- paste0("<div style='line-height:1.2;'>",
                                  ifelse(group_labels != "", paste0("<span style='font-size:smaller;'>", group_labels, "</span><br>"), ""),
                                  "<b>", colnames_data, "</b></div>")
+
+      # if (!is.null(other_samples)) {
+      #   data <- dplyr::bind_cols(data, other_samples)
+      #   print("Other samples:")
+      #   print(other_samples)
+      # }
 
       # Create datatable
       dt <- DT::datatable(

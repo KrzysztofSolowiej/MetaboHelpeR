@@ -8,8 +8,7 @@ app_server <- function(input, output, session) {
 
   loader <- mod_data_loader_server("loader")
   mod_table_viewer_server("viewer", loader$data_loader)
-
-  mod_ranges_server("ranges")
+  mod_ranges_server("ranges", loader$data_loader)
 
   tabs_inserted <- reactiveVal(FALSE)  # ← Track if we've already added the tabs
 

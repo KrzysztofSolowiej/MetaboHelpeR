@@ -13,6 +13,7 @@
 #' @field file_type The file extension (e.g., "csv", "xlsx").
 #' @field file_path The full path to the uploaded file.
 #' @field compound_col Name of the Compound column.
+#' @field other_samples Other samples data frame.
 #' @field metadata_info Metadata group index.
 DataLoader <- R6::R6Class("DataLoader",
   public = list(
@@ -21,6 +22,7 @@ DataLoader <- R6::R6Class("DataLoader",
     file_type = NULL,
     file_path = NULL,
     compound_col = NULL,
+    other_samples = NULL,
     metadata_info = NULL,
 
     #' @description
@@ -90,6 +92,22 @@ DataLoader <- R6::R6Class("DataLoader",
     },
 
     #' @description
+    #' Store "Other" samples.
+    #' @param other_samples_to_store "Other" samples data frame.
+    set_other_samples = function(other_samples_to_store) {
+      if (is.null(other_samples_to_store)) {
+        stop("No other samples to store")
+      }
+      self$other_samples <- other_samples_to_store
+    },
+
+    #' @description
+    #' Return the compound column.
+    get_other_samples = function() {
+      self$other_samples
+    },
+
+    #' @description
     #' Designate metadata index.
     #' @param index Numeric, the metadata index number.
     set_metadata_info = function(index) {
@@ -140,6 +158,20 @@ DataLoader <- R6::R6Class("DataLoader",
     get_group_vector = function() {
       if (is.null(self$metadata_info)) return(NULL)
       self$metadata_info$group_vector
+    },
+
+    #' @description
+    #' Return unique groups
+    get_unique_groups = function() {
+      if (is.null(self$metadata_info)) return(NULL)
+      self$metadata_info$unique_groups
+    },
+
+    #' @description
+    #' Return group counts
+    get_group_counts = function() {
+      if (is.null(self$metadata_info)) return(NULL)
+      self$metadata_info$group_counts
     },
 
     #' @description

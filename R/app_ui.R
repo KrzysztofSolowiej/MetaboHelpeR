@@ -8,7 +8,7 @@ app_ui <- function(request) {
   tagList(
     golem_add_external_resources(),
     fluidPage(
-      #titlePanel(title = span("MetaboHelpeR", style = "color: #0052cc; font-size: 55px; font-weight: bold; font-family: 'K2D';")),
+      shinyjs::useShinyjs(),
       titlePanel(title = span("MetaboHelpeR", class = "title-font")),
       sidebarLayout(
         sidebarPanel(uiOutput("dynamic_sidebar"), width = 3),

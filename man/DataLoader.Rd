@@ -30,6 +30,8 @@ or stores sheet names if multiple are found.
 
 \item{\code{compound_col}}{Name of the Compound column.}
 
+\item{\code{other_samples}}{Other samples data frame.}
+
 \item{\code{metadata_info}}{Metadata group index.}
 }
 \if{html}{\out{</div>}}
@@ -44,9 +46,13 @@ or stores sheet names if multiple are found.
 \item \href{#method-DataLoader-set_data}{\code{DataLoader$set_data()}}
 \item \href{#method-DataLoader-set_compound_col}{\code{DataLoader$set_compound_col()}}
 \item \href{#method-DataLoader-get_compound_col}{\code{DataLoader$get_compound_col()}}
+\item \href{#method-DataLoader-set_other_samples}{\code{DataLoader$set_other_samples()}}
+\item \href{#method-DataLoader-get_other_samples}{\code{DataLoader$get_other_samples()}}
 \item \href{#method-DataLoader-set_metadata_info}{\code{DataLoader$set_metadata_info()}}
 \item \href{#method-DataLoader-get_metadata_info}{\code{DataLoader$get_metadata_info()}}
 \item \href{#method-DataLoader-get_group_vector}{\code{DataLoader$get_group_vector()}}
+\item \href{#method-DataLoader-get_unique_groups}{\code{DataLoader$get_unique_groups()}}
+\item \href{#method-DataLoader-get_group_counts}{\code{DataLoader$get_group_counts()}}
 \item \href{#method-DataLoader-get_group_indices}{\code{DataLoader$get_group_indices()}}
 \item \href{#method-DataLoader-get_group_colors}{\code{DataLoader$get_group_colors()}}
 \item \href{#method-DataLoader-get_data_excl_metadata}{\code{DataLoader$get_data_excl_metadata()}}
@@ -155,6 +161,33 @@ Return the compound column.
 
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-set_other_samples"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-set_other_samples}{}}}
+\subsection{Method \code{set_other_samples()}}{
+Store "Other" samples.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$set_other_samples(other_samples_to_store)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{other_samples_to_store}}{"Other" samples data frame.}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-get_other_samples"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-get_other_samples}{}}}
+\subsection{Method \code{get_other_samples()}}{
+Return the compound column.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_other_samples()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-DataLoader-set_metadata_info"></a>}}
 \if{latex}{\out{\hypertarget{method-DataLoader-set_metadata_info}{}}}
 \subsection{Method \code{set_metadata_info()}}{
@@ -188,6 +221,26 @@ Return metadata index
 Return group vector
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_group_vector()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-get_unique_groups"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-get_unique_groups}{}}}
+\subsection{Method \code{get_unique_groups()}}{
+Return unique groups
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_unique_groups()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-get_group_counts"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-get_group_counts}{}}}
+\subsection{Method \code{get_group_counts()}}{
+Return group counts
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_group_counts()}\if{html}{\out{</div>}}
 }
 
 }

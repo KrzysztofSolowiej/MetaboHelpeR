@@ -183,26 +183,35 @@ mod_data_loader_server <- function(id) {
 
         ),
         footer = tagList(
-          actionButton(ns("confirm_compound_col"), "Confirm"),
+          actionButton(ns("confirm_compound_col"), "Confirm", class = "btn-primary"),
           modalButton("Cancel")
         ),
         size = "m",
         easyClose = FALSE
       ))
+      shinyjs::disable("confirm_compound_col")
     }
 
     observeEvent(input$num_groups, {
-      req(input$num_groups)
-      val <- input$num_groups
+      val <- suppressWarnings(as.numeric(input$num_groups))
 
-      if (val < 2) {
+      is_valid <- !is.na(val) && val %% 1 == 0 && val >= 2 && val <= 8
+
+      if (is_valid || !is.null(input$metadata_preview_rows_selected)) {
+        shinyjs::enable("confirm_compound_col")
+      } else {
+        shinyjs::disable("confirm_compound_col")
+      }
+
+      if (!is.na(val) && val < 2) {
         updateNumericInput(session, "num_groups", value = 2)
         showNotification("Minimum number of groups is 2.", type = "warning")
-      } else if (val > 8) {
+      } else if (!is.na(val) && val > 8) {
         updateNumericInput(session, "num_groups", value = 8)
         showNotification("Maximum number of groups is 8.", type = "warning")
       }
     })
+
 
 
     output$metadata_preview <- DT::renderDataTable({
@@ -215,7 +224,8 @@ mod_data_loader_server <- function(id) {
     output$custom_group_names_ui <- renderUI({
       req(input$num_groups)
 
-      num_groups <- input$num_groups
+      num_groups <- min(max(2, input$num_groups), 8)
+
       palette_fn <- scales::hue_pal()
       palette <- palette_fn(num_groups)
 
@@ -292,43 +302,50 @@ mod_data_loader_server <- function(id) {
       )
     }
 
-  observeEvent(input$confirm_manual_groups, {
-    loader <- data_loader()
-    num_groups <- input$num_groups
+    observeEvent(input$confirm_manual_groups, {
+      loader <- data_loader()
+      num_groups <- input$num_groups
 
-    # Retrieve custom group names and colors
-    custom_group_names <- sapply(seq_len(num_groups), function(i) input[[paste0("group_name_", i)]])
-    custom_group_colors <- sapply(seq_len(num_groups), function(i) input[[paste0("group_color_", i)]])
-    names(custom_group_colors) <- custom_group_names
+      # Retrieve custom group names and colors
+      custom_group_names <- sapply(seq_len(num_groups), function(i) input[[paste0("group_name_", i)]])
+      custom_group_colors <- sapply(seq_len(num_groups), function(i) input[[paste0("group_color_", i)]])
+      names(custom_group_colors) <- custom_group_names
 
-    group_inputs <- setNames(
-      lapply(seq_len(num_groups), function(i) input[[paste0("group_", i)]]),
-      custom_group_names
-    )
+      group_inputs <- setNames(
+        lapply(seq_len(num_groups), function(i) input[[paste0("group_", i)]]),
+        custom_group_names
+      )
 
-    # Store excluded samples if needed
-    excluded_samples <- input$group_exclude
+      # Store excluded and other samples if needed
+      excluded_samples <- input$group_exclude
+      other_samples <- input$group_other
 
-    # Build group mapping without "Remove"
-    sample_to_group <- unlist(lapply(names(group_inputs), function(g) {
-      samples <- group_inputs[[g]]
-      if (!is.null(samples)) {
-        setNames(rep(g, length(samples)), samples)
-      }
-    }))
+      # Build group mapping without "Remove"
+      sample_to_group <- unlist(lapply(names(group_inputs), function(g) {
+        samples <- group_inputs[[g]]
+        if (!is.null(samples)) {
+          setNames(rep(g, length(samples)), samples)
+        }
+      }))
 
-    # Filter data to exclude "Remove" samples
-    df <- loader$get_data()
-    df <- df[, setdiff(names(df), excluded_samples)]
-    loader$set_data(df)
+      df <- loader$get_data()
 
-    loader$set_manual_group_mapping(sample_to_group, group_colors = custom_group_colors)
-    data_loader(loader)
-    removeModal()
+      # Store "Other" samples
+      other_samples_stored <- df %>%
+        dplyr::select(dplyr::all_of(other_samples))
+      loader$set_other_samples(other_samples_stored)
 
-    non_numeric_cols_to_fix(check_and_handle_non_numeric(data_loader, ns))
-  })
+      # Filter data to exclude "Remove" and "Other" samples
+      df <- df[, setdiff(names(df), excluded_samples)]
+      df <- df[, setdiff(names(df), other_samples)]
+      loader$set_data(df)
 
+      loader$set_manual_group_mapping(sample_to_group, group_colors = custom_group_colors)
+      data_loader(loader)
+      removeModal()
+
+      non_numeric_cols_to_fix(check_and_handle_non_numeric(data_loader, ns))
+    })
 
     observeEvent(input$apply_column_fixes, {
       df <- data_loader()$get_data()
