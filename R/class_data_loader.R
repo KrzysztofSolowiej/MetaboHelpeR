@@ -59,7 +59,7 @@ DataLoader <- R6::R6Class("DataLoader",
     #' @description
     #' Load example data from inst/extdata/example_data.csv.
     load_example = function() {
-      self$data(read.table(system.file("extdata", "example_data.csv", package = "MetaboHelpeR"), header = TRUE))
+      self$data(readRDS(system.file("extdata", "example.rds", package = "MetaboHelpeR")))
     },
 
     #' @description

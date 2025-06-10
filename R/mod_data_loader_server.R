@@ -14,8 +14,11 @@ mod_data_loader_server <- function(id) {
     is_example_data <- reactiveVal(FALSE)
     transpose_prompt_shown <- reactiveVal(FALSE)
     file_input_reset <- reactiveVal(0)
+    group_mapping <- reactiveVal(NULL)
+    color_mapping <- reactiveVal(NULL)
     non_numeric_checked <- reactiveVal(FALSE)
     non_numeric_cols_to_fix <- reactiveVal(NULL)
+    non_numeric_indices_to_fix <- reactiveVal(NULL)
     na_checked <- reactiveVal(FALSE)
     na_cols_to_fix <- reactiveVal(NULL)
     na_rows_to_fix <- reactiveVal(NULL)
@@ -264,7 +267,7 @@ mod_data_loader_server <- function(id) {
 
       data_loader(loader)
       removeModal()
-      non_numeric_cols_to_fix(check_and_handle_non_numeric(data_loader, ns))
+      #non_numeric_cols_to_fix(check_and_handle_non_numeric(data_loader, ns))
     })
 
     show_manual_group_dnd_modal <- function(loader, ns, group_names) {
@@ -310,6 +313,7 @@ mod_data_loader_server <- function(id) {
       custom_group_names <- sapply(seq_len(num_groups), function(i) input[[paste0("group_name_", i)]])
       custom_group_colors <- sapply(seq_len(num_groups), function(i) input[[paste0("group_color_", i)]])
       names(custom_group_colors) <- custom_group_names
+      color_mapping(custom_group_colors)
 
       group_inputs <- setNames(
         lapply(seq_len(num_groups), function(i) input[[paste0("group_", i)]]),
@@ -327,7 +331,7 @@ mod_data_loader_server <- function(id) {
           setNames(rep(g, length(samples)), samples)
         }
       }))
-
+      group_mapping(sample_to_group)
       df <- loader$get_data()
 
       # Store "Other" samples
@@ -344,21 +348,38 @@ mod_data_loader_server <- function(id) {
       data_loader(loader)
       removeModal()
 
-      non_numeric_cols_to_fix(check_and_handle_non_numeric(data_loader, ns))
+      non_numeric_result <- check_and_handle_non_numeric(data_loader, ns)
+
+      if (is.null(non_numeric_result)) {
+        na_cols <- check_and_handle_nas(data_loader, ns)
+        na_cols_to_fix(na_cols)
+      } else {
+        non_numeric_cols_to_fix(non_numeric_result$names)
+        non_numeric_indices_to_fix(non_numeric_result$indices)
+      }
+
     })
 
     observeEvent(input$apply_column_fixes, {
+      loader <- data_loader()
       df <- data_loader()$get_data()
       cols <- non_numeric_cols_to_fix()
+      group_map <- group_mapping()
+      custom_group_colors <- color_mapping()
       req(cols)
+
 
       for (col in cols) {
         strategy <- input[[paste0("action_", col)]]
-        print(paste("Handling", col, "with strategy:", strategy))
+        print(paste("Handling non-numeric col: ", col, "with strategy:", strategy))
 
         if (strategy == "convert") {
           df[[col]] <- suppressWarnings(as.numeric(df[[col]]))
         } else if (strategy == "remove") {
+          group_map_clean <- group_map[!names(group_map) %in% cols]
+          group_mapping(group_map_clean)
+          loader$set_manual_group_mapping(group_map_clean, group_colors = custom_group_colors)
+          data_loader(loader)
           df[[col]] <- NULL
         }
         # Do nothing if strategy is "none"
@@ -371,19 +392,31 @@ mod_data_loader_server <- function(id) {
     })
 
     observeEvent(input$apply_na_fixes, {
+      loader <- data_loader()
       df <- data_loader()$get_data()
       cols <- na_cols_to_fix()
+      group_map <- group_mapping()
+      custom_group_colors <- color_mapping()
       req(cols)
+
+      cols_to_remove <- c()
 
       for (col in cols) {
         strategy <- input[[paste0("na_action_", col)]]
+        print(paste("Handling NA col: ", col, ", with strategy:", strategy))
         if (strategy == "convert_zero") {
           df[[col]][is.na(df[[col]])] <- 0
-        } else if (strategy == "remove_row") {
-          df <- df[!is.na(df[[col]]), , drop = FALSE]
         } else if (strategy == "remove_col") {
-          df[[col]] <- NULL
+          cols_to_remove <- c(cols_to_remove, col)
         }
+      }
+
+      # Remove columns from group map and data (after loop to avoid partial updates)
+      if (length(cols_to_remove) > 0) {
+        group_map_clean <- group_map[!names(group_map) %in% cols_to_remove]
+        group_mapping(group_map_clean)
+        loader$set_manual_group_mapping(group_map_clean, group_colors = custom_group_colors)
+        df <- df[, !names(df) %in% cols_to_remove]
       }
 
       data_loader()$set_data(df)
@@ -397,7 +430,7 @@ mod_data_loader_server <- function(id) {
       loader$load_example()
       is_example_data(TRUE)
       transpose_prompt_shown(TRUE)
-      loader$set_compound_col("Compound.Name")
+      loader$set_compound_col("Compound Name")
       data_loader(loader)
       file_input_reset(file_input_reset() + 1)
     })

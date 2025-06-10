@@ -90,7 +90,10 @@ check_and_handle_non_numeric <- function(data_loader, ns) {
   compound_col <- data_loader()$get_compound_col()
   df <- data_loader()$get_data_excl_metadata()
   cols_to_check <- setdiff(names(df), compound_col)
-  non_numeric_cols <- cols_to_check[!sapply(df[cols_to_check], is.numeric)]
+
+  is_non_numeric <- !sapply(df[cols_to_check], is.numeric)
+  non_numeric_cols <- cols_to_check[is_non_numeric]
+  non_numeric_indices <- which(names(df) %in% non_numeric_cols)
 
   if (length(non_numeric_cols) == 0) return(NULL)
 
@@ -116,7 +119,10 @@ check_and_handle_non_numeric <- function(data_loader, ns) {
     )
   ))
 
-  return(non_numeric_cols)
+  return(list(
+    names = non_numeric_cols,
+    indices = non_numeric_indices
+  ))
 }
 
 #' Check for missing values in a data frame
@@ -143,8 +149,9 @@ check_and_handle_nas <- function(data_loader, ns) {
     selectInput(
       inputId = ns(paste0("na_action_", col)),
       label = paste0(col, " (", na_summary[col], " NA)"),
-      choices = c("Remove rows" = "remove_row", "Remove column" = "remove_col", "Convert NA to 0" = "convert_zero"),
-      selected = "remove_row"
+      choices = c("Convert NA to 0" = "convert_zero", "Remove column" = "remove_col"),
+      #, "Remove rows" = "remove_row"),
+      selected = "convert_zero"
     )
   })
 

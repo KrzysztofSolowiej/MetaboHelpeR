@@ -12,13 +12,10 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
       validate(need(!is.null(data), "No data available"))
 
       group_vector <- data_loaded$get_group_vector()
-      group_indices <- data_loaded$get_group_indices()
-      group_names <- names(group_indices)
+      group_names <- data_loaded$get_unique_groups()
       other_samples <- data_loaded$get_other_samples()
       group_colors <- data_loaded$get_group_colors()
 
-      print("Metadata checkup")
-      print(data_loaded$get_metadata_info())
 
       group_labels <- rep("", ncol(data))
       colnames_data <- colnames(data)
@@ -32,15 +29,22 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
         }
       }
 
+      if (!is.null(other_samples)) {
+        data <- dplyr::bind_cols(data, other_samples)
+        group_labels <- c(group_labels, rep("Other", ncol(other_samples)))
+        colnames_data <- c(colnames_data, colnames(other_samples))
+      }
+
       display_colnames <- paste0("<div style='line-height:1.2;'>",
                                  ifelse(group_labels != "", paste0("<span style='font-size:smaller;'>", group_labels, "</span><br>"), ""),
                                  "<b>", colnames_data, "</b></div>")
 
-      # if (!is.null(other_samples)) {
-      #   data <- dplyr::bind_cols(data, other_samples)
-      #   print("Other samples:")
-      #   print(other_samples)
-      # }
+      # print("Group vector:")
+      # print(group_vector)
+      # print("Group names:")
+      # print(group_names)
+      # print("Data structure:")
+      # str(data)
 
       # Create datatable
       dt <- DT::datatable(
@@ -61,10 +65,10 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
         class = "stripe hover"
       )
 
-      # Apply group-based column coloring if any groups are defined
       if (length(group_names) > 0 && !is.null(group_colors)) {
         for (group in group_names) {
-          cols <- group_indices[[group]]
+          # Get column names belonging to this group
+          cols <- names(group_vector)[group_vector == group]
           color <- group_colors[[group]]
           for (col in cols) {
             dt <- DT::formatStyle(dt,
@@ -74,6 +78,7 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
           }
         }
       }
+
 
       rownames(dt) <- NULL
       dt
