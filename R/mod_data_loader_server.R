@@ -267,7 +267,6 @@ mod_data_loader_server <- function(id) {
 
       data_loader(loader)
       removeModal()
-      #non_numeric_cols_to_fix(check_and_handle_non_numeric(data_loader, ns))
     })
 
     show_manual_group_dnd_modal <- function(loader, ns, group_names) {
@@ -343,7 +342,6 @@ mod_data_loader_server <- function(id) {
       df <- df[, setdiff(names(df), excluded_samples)]
       df <- df[, setdiff(names(df), other_samples)]
       loader$set_data(df)
-
       loader$set_manual_group_mapping(sample_to_group, group_colors = custom_group_colors)
       data_loader(loader)
       removeModal()
@@ -431,8 +429,41 @@ mod_data_loader_server <- function(id) {
       is_example_data(TRUE)
       transpose_prompt_shown(TRUE)
       loader$set_compound_col("Compound Name")
-      data_loader(loader)
       file_input_reset(file_input_reset() + 1)
+
+      other_samples <- c("Mass", "RT")
+      df <- loader$get_data()
+
+      other_samples_stored <- df %>%
+        dplyr::select(dplyr::all_of(other_samples))
+      loader$set_other_samples(other_samples_stored)
+
+      df <- df[, setdiff(names(df), other_samples)]
+      loader$set_data(df)
+
+      fixed_group_mapping <- c("K-1" = "Control", "K-10" = "Control", "K-11" = "Control", "K-12" = "Control",
+                               "K-13" = "Control", "K-14" = "Control", "K-15" = "Control", "K-16" = "Control",
+                               "K-17" = "Control", "K-18" = "Control", "K-19" = "Control", "K-2" = "Control",
+                               "K-20" = "Control", "K-21" = "Control", "K-22" = "Control", "K-23" = "Control",
+                               "K-24" = "Control", "K-25" = "Control", "K-26" = "Control", "K-27" = "Control",
+                               "K-28" = "Control", "K-29" = "Control", "K-3" = "Control", "K-30" = "Control",
+                               "K-4" = "Control", "K-5" = "Control", "K-6" = "Control", "K-7" = "Control",
+                               "K-8" = "Control", "K-9" = "Control", "16V0" = "Case", "15V0" = "Case",
+                               "10V0" = "Case", "17V0" = "Case", "11V0" = "Case", "18V0" = "Case",
+                               "19V0" = "Case", "20V0" = "Case", "22V0" = "Case", "14V0" = "Case",
+                               "23V0" = "Case", "26V0" = "Case", "12V0B" = "Case", "27V0" = "Case",
+                               "29V0" = "Case", "30V0" = "Case", "25V0" = "Case", "33V0" = "Case",
+                               "32V0" = "Case", "34V0" = "Case", "35V0" = "Case", "28V0" = "Case",
+                               "39V0" = "Case", "38V0" = "Case", "40V0" = "Case", "24V0" = "Case",
+                               "13V0" = "Case", "12V0a" = "Case", "36V0" = "Case", QC_3 = "QC",
+                               QC_7 = "QC", QC_2 = "QC", QC_12 = "QC", QC_4 = "QC", QC_5 = "QC",
+                               QC_6 = "QC", QC_11 = "QC", QC_10 = "QC", QC_8 = "QC", QC_1 = "QC",
+                               QC_9 = "QC")
+      fixed_colors <- c(Control = "#F8766D", Case = "#00BA38", QC = "#619CFF")
+      loader$set_manual_group_mapping(fixed_group_mapping, group_colors = fixed_colors)
+
+
+      data_loader(loader)
     })
 
     output$group_metadata <- DT::renderDataTable({

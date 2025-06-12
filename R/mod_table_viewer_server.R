@@ -84,5 +84,30 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
       dt
     })
 
+    output$download_table_button <- renderUI({
+      req(data_loader_reactive()$get_data_excl_metadata())
+      tagList(
+        br(),
+        tags$p("Download your processed data"),
+        downloadHandler(
+          filename = function() {
+            current_datetime <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+            paste0("metabo_table_", current_datetime, ".csv")
+          },
+          content = function(file) {
+            data_loaded <- data_loader_reactive()
+            data <- data_loaded$get_data_excl_metadata()
+            other_samples <- data_loaded$get_other_samples()
+
+            if (!is.null(other_samples)) {
+              data <- dplyr::bind_cols(data, other_samples)
+            }
+
+            write.csv(data, file, row.names = TRUE)
+          }
+
+        ))
+    })
+
   })
 }

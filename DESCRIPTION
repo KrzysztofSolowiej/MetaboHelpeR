@@ -17,11 +17,13 @@ Imports:
     htmlwidgets,
     janitor,
     jsonlite,
+    pkgload,
     plotly,
     purrr,
     scales,
     shiny,
     shinyjs,
+    shinyWidgets,
     sortable
 Encoding: UTF-8
 LazyData: true

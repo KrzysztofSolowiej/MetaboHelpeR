@@ -27,6 +27,7 @@ mod_table_viewer_sidebar <- function(id) {
   ns <- NS(id)
 
   tagList(
-    actionButton(ns("download_table_button"), "Download CSV file")
+    uiOutput(ns("download_table_button"))
+    #downloadButton(ns("download_table_button"), "Download CSV file")
   )
 }

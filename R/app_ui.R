@@ -9,6 +9,7 @@ app_ui <- function(request) {
     golem_add_external_resources(),
     fluidPage(
       shinyjs::useShinyjs(),
+      shinyWidgets::chooseSliderSkin("Flat", color = "#fe9e2e"),
       titlePanel(title = span("MetaboHelpeR", class = "title-font")),
       sidebarLayout(
         sidebarPanel(uiOutput("dynamic_sidebar"), width = 3),
@@ -16,7 +17,6 @@ app_ui <- function(request) {
           tabsetPanel(
             id = "main_tabs",
             tabPanel("Load Data", mod_data_loader_ui("loader"))
-            # DO NOT include Explore Data or Show Ranges here
           )
         )
       )

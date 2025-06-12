@@ -9,6 +9,7 @@ app_server <- function(input, output, session) {
   loader <- mod_data_loader_server("loader")
   mod_table_viewer_server("viewer", loader$data_loader)
   mod_ranges_server("ranges", loader$data_loader)
+  mod_box_server("box", loader$data_loader)
 
   tabs_inserted <- reactiveVal(FALSE)  # ← Track if we've already added the tabs
 
@@ -16,7 +17,8 @@ app_server <- function(input, output, session) {
     switch(input$main_tabs,
            "Load Data" = mod_data_loader_sidebar("loader"),
            "Explore Data" = mod_table_viewer_sidebar("viewer"),
-           "Show Ranges" = mod_ranges_sidebar("ranges")
+           "Show Ranges" = mod_ranges_sidebar("ranges"),
+           "Visualize" = mod_box_sidebar("box")
     )
   })
 
@@ -33,6 +35,12 @@ app_server <- function(input, output, session) {
           inputId = "main_tabs",
           tab = tabPanel("Show Ranges", mod_ranges_ui("ranges")),
           target = "Explore Data",
+          position = "after"
+        )
+        insertTab(
+          inputId = "main_tabs",
+          tab = tabPanel("Visualize", mod_box_ui("box")),
+          target = "Show Ranges",
           position = "after"
         )
         tabs_inserted(TRUE)  # Mark tabs as inserted

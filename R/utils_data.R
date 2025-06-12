@@ -189,4 +189,4 @@ check_no_negatives <- function(df) {
     insist(within_bounds(0, Inf), everything(), error_fun = error_stop)
 }
 
-
+# Check for duplicates
