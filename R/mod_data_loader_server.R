@@ -16,11 +16,15 @@ mod_data_loader_server <- function(id) {
     file_input_reset <- reactiveVal(0)
     group_mapping <- reactiveVal(NULL)
     color_mapping <- reactiveVal(NULL)
+    fix_step <- reactiveVal(NULL)
     non_numeric_checked <- reactiveVal(FALSE)
     non_numeric_cols_to_fix <- reactiveVal(NULL)
     non_numeric_indices_to_fix <- reactiveVal(NULL)
     na_checked <- reactiveVal(FALSE)
     na_cols_to_fix <- reactiveVal(NULL)
+    neg_cols_to_fix <- reactiveVal(NULL)
+    dupli_names_to_fix <- reactiveVal(NULL)
+    dup_rename_id_map <- reactiveVal()
     na_rows_to_fix <- reactiveVal(NULL)
 
     selected_metadata_row <- reactive({
@@ -32,12 +36,14 @@ mod_data_loader_server <- function(id) {
       fileInput(ns("file"), "Upload CSV or Excel file")
     })
 
+
     observeEvent(input$file, {
       req(input$file)
       path <- input$file$datapath
       loader <- DataLoader$new(path)
       loader$compound_col <- NULL
       data_loader(loader)
+      loader$set_file_name(input$file$name)
       is_example_data(FALSE)
       transpose_prompt_shown(FALSE)
 
@@ -139,7 +145,7 @@ mod_data_loader_server <- function(id) {
       transpose_prompt_shown(TRUE)
       removeModal()
       if (!is_example_data()) {
-        show_compound_and_metadata_modal(names(transposed))
+        show_compound_and_metadata_modal(names(transposed), ns)
       }
     })
 
@@ -149,51 +155,9 @@ mod_data_loader_server <- function(id) {
 
       df <- data_loader()$get_data()
       if (!is_example_data()) {
-        show_compound_and_metadata_modal(names(df))
+        show_compound_and_metadata_modal(names(df), ns)
       }
     })
-
-    show_compound_and_metadata_modal <- function(column_choices) {
-      showModal(modalDialog(
-        title = "Select Compound Column and Metadata",
-        tagList(
-          selectInput(ns("compound_col_select"), "Which column contains compound names?", choices = column_choices),
-          checkboxInput(ns("has_metadata"), "Does your data include group metadata?", value = FALSE),
-          conditionalPanel(
-            condition = sprintf("input['%s'] == true", ns("has_metadata")),
-            h5("Click on a row below to set it as group metadata:"),
-            tags$div(
-              style = "
-                  max-width: 90%;
-                  max-height: 200px;
-                  overflow-y: auto;
-                  border: 1px solid #ccc;
-                  padding: 8px;
-                  font-size: 0.85em;
-                  background-color: #f9f9f9;
-                  margin-top: 10px;
-                ",
-              DT::dataTableOutput(ns("metadata_preview"))
-            )
-          ),
-          conditionalPanel(
-            condition = sprintf("input['%s'] == false", ns("has_metadata")),
-            tagList(
-              numericInput(ns("num_groups"), "Number of Groups", value = 2, min = 2, max = 8, step = 1),
-              uiOutput(ns("custom_group_names_ui"))
-            )
-          )
-
-        ),
-        footer = tagList(
-          actionButton(ns("confirm_compound_col"), "Confirm", class = "btn-primary"),
-          modalButton("Cancel")
-        ),
-        size = "m",
-        easyClose = FALSE
-      ))
-      shinyjs::disable("confirm_compound_col")
-    }
 
     observeEvent(input$num_groups, {
       val <- suppressWarnings(as.numeric(input$num_groups))
@@ -214,8 +178,6 @@ mod_data_loader_server <- function(id) {
         showNotification("Maximum number of groups is 8.", type = "warning")
       }
     })
-
-
 
     output$metadata_preview <- DT::renderDataTable({
       req(data_loader(), data_loader()$get_data())
@@ -240,10 +202,8 @@ mod_data_loader_server <- function(id) {
       })
     })
 
-
     observeEvent(input$confirm_compound_col, {
       loader <- data_loader()
-
       loader$set_compound_col(input$compound_col_select)
 
       if (isTRUE(input$has_metadata)) {
@@ -252,9 +212,16 @@ mod_data_loader_server <- function(id) {
           return()
         }
 
-        loader$set_metadata_info(
-          index = input$metadata_preview_rows_selected
-        )
+        loader$set_metadata_info(index = input$metadata_preview_rows_selected)
+
+        data_loader(loader)
+
+        shiny::isolate({
+          fix_step("check_non_numeric")
+        })
+
+        removeModal()
+        return()
       }
 
       if (!isTRUE(input$has_metadata)) {
@@ -264,45 +231,7 @@ mod_data_loader_server <- function(id) {
         show_manual_group_dnd_modal(loader, ns, group_names = group_names)
         return()
       }
-
-      data_loader(loader)
-      removeModal()
     })
-
-    show_manual_group_dnd_modal <- function(loader, ns, group_names) {
-      df <- loader$get_data_excl_metadata()
-      sample_cols <- setdiff(names(df), loader$get_compound_col())
-
-      # Drag-and-drop buckets
-      rank_lists <- lapply(seq_along(group_names), function(i) {
-        labels <- if (i == 1) sample_cols else NULL
-        sortable::add_rank_list(group_names[i], input_id = ns(paste0("group_", i)), labels = labels)
-      })
-
-      # Add "Remove" and "Other" buckets
-      rank_lists <- append(rank_lists, list(
-        sortable::add_rank_list("Remove", input_id = ns("group_exclude"), labels = NULL),
-        sortable::add_rank_list("Other", input_id = ns("group_other"), labels = NULL)
-      ))
-
-      showModal(
-        mymodal(
-          idcss = "dnd-modal",  # applies to modal-dialog
-          title = div("Manually Assign Groups (Drag & Drop)", class = "dnd-modal-title"),
-          sortable::bucket_list(
-            header = "Drag sample names into group buckets below:",
-            group_name = "group_assign",
-            orientation = "horizontal",
-            !!!rank_lists
-          ),
-          footer = tagList(
-            actionButton(ns("confirm_manual_groups"), "Confirm"),
-            modalButton("Cancel")
-          ),
-          easyClose = FALSE
-        )
-      )
-    }
 
     observeEvent(input$confirm_manual_groups, {
       loader <- data_loader()
@@ -346,16 +275,51 @@ mod_data_loader_server <- function(id) {
       data_loader(loader)
       removeModal()
 
-      non_numeric_result <- check_and_handle_non_numeric(data_loader, ns)
+      fix_step("check_non_numeric")
+    })
 
-      if (is.null(non_numeric_result)) {
+
+    observeEvent(fix_step(), {
+      step <- fix_step()
+      loader <- data_loader()
+
+      if (step == "check_non_numeric") {
+        result <- check_and_handle_non_numeric(data_loader, ns)
+        if (!is.null(result)) {
+          non_numeric_cols_to_fix(result$names)
+          non_numeric_indices_to_fix(result$indices)
+          return()
+        } else {
+          fix_step("check_na")
+        }
+
+      } else if (step == "check_na") {
         na_cols <- check_and_handle_nas(data_loader, ns)
-        na_cols_to_fix(na_cols)
-      } else {
-        non_numeric_cols_to_fix(non_numeric_result$names)
-        non_numeric_indices_to_fix(non_numeric_result$indices)
-      }
+        if (length(na_cols) > 0) {
+          na_cols_to_fix(na_cols)
+          return()
+        } else {
+          fix_step("check_negative")
+        }
 
+      } else if (step == "check_negative") {
+        neg_cols <- check_no_negatives(data_loader, ns)
+        if (length(neg_cols) > 0) {
+          neg_cols_to_fix(neg_cols)
+          return()
+        } else {
+          fix_step("check_duplicates")
+        }
+
+      } else if (step == "check_duplicates") {
+        dup_names <- check_and_handle_duplicates(data_loader, ns)
+        if (!is.null(dup_names) && length(dup_names) > 0) {
+          dupli_names_to_fix(dup_names)
+          return()
+        } else {
+          fix_step(NULL)  # done
+        }
+      }
     })
 
     observeEvent(input$apply_column_fixes, {
@@ -385,8 +349,8 @@ mod_data_loader_server <- function(id) {
 
       data_loader()$set_data(df)
       removeModal()
-      na_cols <- check_and_handle_nas(data_loader, ns)
-      na_cols_to_fix(na_cols)
+
+      fix_step("check_na")
     })
 
     observeEvent(input$apply_na_fixes, {
@@ -409,8 +373,7 @@ mod_data_loader_server <- function(id) {
         }
       }
 
-      # Remove columns from group map and data (after loop to avoid partial updates)
-      if (length(cols_to_remove) > 0) {
+      if (!is.null(group_map) && !is.null(custom_group_colors)) {
         group_map_clean <- group_map[!names(group_map) %in% cols_to_remove]
         group_mapping(group_map_clean)
         loader$set_manual_group_mapping(group_map_clean, group_colors = custom_group_colors)
@@ -420,7 +383,71 @@ mod_data_loader_server <- function(id) {
       data_loader()$set_data(df)
       print(sum(is.na(data_loader()$get_data())))
       removeModal()
+      fix_step("check_negative")
+    })
 
+    observeEvent(input$apply_neg_fixes, {
+      loader <- data_loader()
+      df <- data_loader()$get_data()
+      cols <- neg_cols_to_fix()
+      group_map <- group_mapping()
+      custom_group_colors <- color_mapping()
+      req(cols)
+
+      cols_to_remove <- c()
+
+      for (col in cols) {
+        strategy <- input[[paste0("neg_action_", col)]]
+        print(paste("Handling neg col: ", col, ", with strategy:", strategy))
+        if (strategy == "convert_zero") {
+          df[[col]][df[[col]] < 0] <- 0
+        } else if (strategy == "remove_col") {
+          cols_to_remove <- c(cols_to_remove, col)
+        }
+      }
+
+      if (!is.null(group_map) && !is.null(custom_group_colors)) {
+        group_map_clean <- group_map[!names(group_map) %in% cols_to_remove]
+        group_mapping(group_map_clean)
+        loader$set_manual_group_mapping(group_map_clean, group_colors = custom_group_colors)
+      }
+
+      data_loader()$set_data(df)
+      removeModal()
+      fix_step("check_duplicates")
+    })
+
+
+    observeEvent(input$apply_dup_renames, {
+      loader <- data_loader()
+      df <- data_loader()$get_data()
+      comp_col <- loader$get_compound_col()
+      dup_names <- dupli_names_to_fix()
+      print("Duplicate names to fix:")
+      print(dup_names)
+      req(dup_names)
+
+      comp_names <- df[[comp_col]]
+      new_names <- comp_names
+
+      input_counter <- 1
+      for (name in dup_names) {
+        indices <- which(comp_names == name)
+        if (length(indices) < 2) next
+        for (j in 2:length(indices)) {
+          new_name <- input[[paste0("rename_dup_", input_counter)]]
+          if (!is.null(new_name) && new_name != "") {
+            new_names[indices[j]] <- new_name
+          }
+          input_counter <- input_counter + 1
+        }
+      }
+
+      df[[comp_col]] <- new_names
+      loader$set_data(df)
+
+      removeModal()
+      fix_step(NULL)
     })
 
     observeEvent(input$load_example_button, {
@@ -440,7 +467,6 @@ mod_data_loader_server <- function(id) {
 
       df <- df[, setdiff(names(df), other_samples)]
       loader$set_data(df)
-
       fixed_group_mapping <- c("K-1" = "Control", "K-10" = "Control", "K-11" = "Control", "K-12" = "Control",
                                "K-13" = "Control", "K-14" = "Control", "K-15" = "Control", "K-16" = "Control",
                                "K-17" = "Control", "K-18" = "Control", "K-19" = "Control", "K-2" = "Control",

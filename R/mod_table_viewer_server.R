@@ -5,6 +5,17 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    output$file_name_display <- renderText({
+      data_loaded <- data_loader_reactive()
+      req(data_loaded)
+      path <- data_loaded$get_file_name()
+      if (!is.null(path)) {
+        basename(path)
+      } else {
+        "No file loaded yet"
+      }
+    })
+
     output$cleaned_table <- DT::renderDataTable({
       data_loaded <- data_loader_reactive()
       req(data_loaded)
@@ -39,13 +50,6 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
                                  ifelse(group_labels != "", paste0("<span style='font-size:smaller;'>", group_labels, "</span><br>"), ""),
                                  "<b>", colnames_data, "</b></div>")
 
-      # print("Group vector:")
-      # print(group_vector)
-      # print("Group names:")
-      # print(group_names)
-      # print("Data structure:")
-      # str(data)
-
       # Create datatable
       dt <- DT::datatable(
         data,
@@ -61,7 +65,6 @@ mod_table_viewer_server <- function(id, data_loader_reactive) {
           pageLength = 20
         ),
         rownames = TRUE,
-        filter = "top",
         class = "stripe hover"
       )
 

@@ -12,6 +12,7 @@
 #' @field sheets Names of sheets in the Excel file (if applicable).
 #' @field file_type The file extension (e.g., "csv", "xlsx").
 #' @field file_path The full path to the uploaded file.
+#' @field file_name The original name of the uploaded file.
 #' @field compound_col Name of the Compound column.
 #' @field other_samples Other samples data frame.
 #' @field metadata_info Metadata group index.
@@ -21,6 +22,7 @@ DataLoader <- R6::R6Class("DataLoader",
     sheets = NULL,
     file_type = NULL,
     file_path = NULL,
+    file_name = NULL,
     compound_col = NULL,
     other_samples = NULL,
     metadata_info = NULL,
@@ -29,7 +31,8 @@ DataLoader <- R6::R6Class("DataLoader",
     #' Initialize the DataLoader instance.
     #' @param path Optional file path to a CSV file.
     initialize = function(path = NULL) {
-      self$data <- reactiveVal()  # initialize as reactive
+      self$data <- reactiveVal(NULL)
+      self$file_name <- reactiveVal(NULL)
 
       if (!is.null(path)) {
         self$file_path <- path
@@ -73,6 +76,19 @@ DataLoader <- R6::R6Class("DataLoader",
     #' @param df A data frame to replace the current dataset.
     set_data = function(df) {
       self$data(df)
+    },
+
+    #' @description
+    #' Return the name of currently loaded data as a string.
+    get_file_name = function() {
+      self$file_name()
+    },
+
+    #' @description
+    #' Set the file name.
+    #' @param name A name of the loaded file.
+    set_file_name = function(name) {
+      self$file_name(name)
     },
 
     #' @description
@@ -198,7 +214,6 @@ DataLoader <- R6::R6Class("DataLoader",
         df <- df[-self$metadata_info$index, , drop = FALSE]
       }
 
-      # Try to convert all columns to numeric where possible
       df[] <- lapply(df, function(col) {
         if (is.character(col) || is.factor(col)) {
           suppressWarnings(num_col <- as.numeric(as.character(col)))

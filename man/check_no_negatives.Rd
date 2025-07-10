@@ -4,13 +4,15 @@
 \alias{check_no_negatives}
 \title{Check for negative values in a data frame}
 \usage{
-check_no_negatives(df)
+check_no_negatives(data_loader, ns)
 }
 \arguments{
-\item{df}{A data frame to check}
+\item{data_loader}{A data loader object}
+
+\item{ns}{The namespace function for UI elements}
 }
 \value{
-The original data frame if valid; throws error otherwise
+NULL if no negatives found; otherwise returns affected columns
 }
 \description{
 Ensures no values in the dataset are negative.

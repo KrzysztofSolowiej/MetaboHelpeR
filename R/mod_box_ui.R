@@ -27,6 +27,7 @@ mod_box_sidebar <- function(id) {
   ns <- NS(id)
 
   tagList(
+    textOutput(ns("file_name_display")),
     uiOutput(ns("compound_selector_ui")),
     tags$div(
       style = "display: flex; align-items: center; gap: 6px; position: relative;",
@@ -46,13 +47,17 @@ mod_box_sidebar <- function(id) {
     selectInput(
       ns("plot_type"),
       label = "Plot type",
-      choices = c("Boxplot" = "box", "Violin" = "violin"),
+      choices = c("Boxplot" = "box", "Violinplot" = "violin"),
       selected = "box"
     ),
     tags$div(
       sliderInput(ns("box_plot_height"), 'Adjust plot height',
                   min = 250, max = 1000, value = 750, step = 1
-    ))
+    )),
+    conditionalPanel(
+      condition = sprintf("input['%s']", ns("checkbox_signif")),
+      tags$h4("Pairwise p-values"),
+      tableOutput(ns("pvalues_table"))
+    )
   )
 }
-

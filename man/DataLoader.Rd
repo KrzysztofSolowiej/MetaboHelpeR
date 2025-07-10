@@ -28,6 +28,8 @@ or stores sheet names if multiple are found.
 
 \item{\code{file_path}}{The full path to the uploaded file.}
 
+\item{\code{file_name}}{The original name of the uploaded file.}
+
 \item{\code{compound_col}}{Name of the Compound column.}
 
 \item{\code{other_samples}}{Other samples data frame.}
@@ -44,6 +46,8 @@ or stores sheet names if multiple are found.
 \item \href{#method-DataLoader-load_example}{\code{DataLoader$load_example()}}
 \item \href{#method-DataLoader-get_data}{\code{DataLoader$get_data()}}
 \item \href{#method-DataLoader-set_data}{\code{DataLoader$set_data()}}
+\item \href{#method-DataLoader-get_file_name}{\code{DataLoader$get_file_name()}}
+\item \href{#method-DataLoader-set_file_name}{\code{DataLoader$set_file_name()}}
 \item \href{#method-DataLoader-set_compound_col}{\code{DataLoader$set_compound_col()}}
 \item \href{#method-DataLoader-get_compound_col}{\code{DataLoader$get_compound_col()}}
 \item \href{#method-DataLoader-set_other_samples}{\code{DataLoader$set_other_samples()}}
@@ -129,6 +133,33 @@ Set the internal data.
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{df}}{A data frame to replace the current dataset.}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-get_file_name"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-get_file_name}{}}}
+\subsection{Method \code{get_file_name()}}{
+Return the name of currently loaded data as a string.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$get_file_name()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-DataLoader-set_file_name"></a>}}
+\if{latex}{\out{\hypertarget{method-DataLoader-set_file_name}{}}}
+\subsection{Method \code{set_file_name()}}{
+Set the file name.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{DataLoader$set_file_name(name)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{name}}{A name of the loaded file.}
 }
 \if{html}{\out{</div>}}
 }

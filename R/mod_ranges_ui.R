@@ -27,6 +27,7 @@ mod_ranges_sidebar <- function(id) {
   ns <- NS(id)
 
   tagList(
+    textOutput(ns("file_name_display")),
     tags$div(
       checkboxInput(ns("checkbox_mean_point"), "Add mean point", value = FALSE),
       sliderInput(ns("plot_height"), 'Adjust plot height',

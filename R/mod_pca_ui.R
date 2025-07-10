@@ -1,4 +1,4 @@
-#' table_viewer UI Function
+#' PCA UI Function
 #'
 #' @description A shiny Module.
 #'
@@ -7,14 +7,15 @@
 #' @noRd
 #'
 #' @importFrom shiny NS tagList
-mod_table_viewer_ui <- function(id) {
+mod_pca_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    DT::dataTableOutput(ns("cleaned_table"))
+    #DT::dataTableOutput(ns("pca_table"))
+    plotly::plotlyOutput(ns("pca_plot"))
   )
 }
 
-#' table_viewer Sidebar Function
+#' PCA module Sidebar Function
 #'
 #' @description Sidebar UI for a shiny Table Viewer Module.
 #'
@@ -23,11 +24,10 @@ mod_table_viewer_ui <- function(id) {
 #' @noRd
 #'
 #' @importFrom shiny NS tagList
-mod_table_viewer_sidebar <- function(id) {
+mod_pca_sidebar <- function(id) {
   ns <- NS(id)
 
   tagList(
-    textOutput(ns("file_name_display")),
-    uiOutput(ns("download_table_button"))
+    textOutput(ns("file_name_display"))
   )
 }

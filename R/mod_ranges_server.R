@@ -5,6 +5,17 @@ mod_ranges_server <- function(id, data_loader_reactive){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
 
+    output$file_name_display <- renderText({
+      data_loaded <- data_loader_reactive()
+      req(data_loaded)
+      path <- data_loaded$get_file_name()
+      if (!is.null(path)) {
+        basename(path)
+      } else {
+        "No file loaded yet"
+      }
+    })
+
     output$linerange_plot <- plotly::renderPlotly({
       data_loaded <- data_loader_reactive()
       height_value <- input$plot_height

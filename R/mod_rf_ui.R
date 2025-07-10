@@ -1,4 +1,4 @@
-#' table_viewer UI Function
+#' RF UI Function
 #'
 #' @description A shiny Module.
 #'
@@ -7,14 +7,14 @@
 #' @noRd
 #'
 #' @importFrom shiny NS tagList
-mod_table_viewer_ui <- function(id) {
+mod_rf_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    DT::dataTableOutput(ns("cleaned_table"))
+    DT::dataTableOutput(ns("rf_table"))
   )
 }
 
-#' table_viewer Sidebar Function
+#' RF module Sidebar Function
 #'
 #' @description Sidebar UI for a shiny Table Viewer Module.
 #'
@@ -23,11 +23,10 @@ mod_table_viewer_ui <- function(id) {
 #' @noRd
 #'
 #' @importFrom shiny NS tagList
-mod_table_viewer_sidebar <- function(id) {
+mod_rf_sidebar <- function(id) {
   ns <- NS(id)
 
   tagList(
-    textOutput(ns("file_name_display")),
-    uiOutput(ns("download_table_button"))
+    textOutput(ns("file_name_display"))
   )
 }

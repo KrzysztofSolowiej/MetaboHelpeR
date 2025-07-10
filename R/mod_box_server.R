@@ -5,40 +5,68 @@ mod_box_server <- function(id, data_loader_reactive){
   moduleServer(id, function(input, output, session){
     ns <- session$ns
 
-    output$compound_selector_ui <- renderUI({
+    pvalues_reactive <- reactiveVal(NULL)
+
+    output$file_name_display <- renderText({
+      data_loaded <- data_loader_reactive()
+      req(data_loaded)
+      path <- data_loaded$get_file_name()
+      if (!is.null(path)) {
+        basename(path)
+      } else {
+        "No file loaded yet"
+      }
+    })
+
+    output$pvalues_table <- renderTable({
+      req(pvalues_reactive())
+      pvalues_reactive()
+    })
+
+    compound_df <- reactive({
       data_loaded <- data_loader_reactive()
       req(data_loaded)
       data <- data_loaded$get_data_excl_metadata()
       compound_col <- data_loaded$get_compound_col()
       validate(need(!is.null(data), "No data available"))
-
-      compound_names <- data[[compound_col]]
-        selectizeInput(
-          ns("selected_compound"),
-          label = "Search compound",
-          choices = compound_names,
-          selected = compound_names[[1]],
-          options = list(
-            placeholder = "Type to search...",
-            maxOptions = 10000
-          )
-        )
+      list(
+        data = data,
+        compound_col = compound_col,
+        group_vector = data_loaded$get_group_vector(),
+        group_colors = data_loaded$get_group_colors()
+      )
     })
 
+    output$compound_selector_ui <- renderUI({
+      df_info <- compound_df()
+      data <- df_info$data
+      compound_col <- df_info$compound_col
+      compound_names <- data[[compound_col]]
+
+      selectizeInput(
+        ns("selected_compound"),
+        label = "Search compound",
+        choices = compound_names,
+        selected = compound_names[[1]],
+        options = list(
+          placeholder = "Type to search...",
+          maxOptions = 10000
+        )
+      )
+    })
 
     output$box_plot <- plotly::renderPlotly({
-      data_loaded <- data_loader_reactive()
+      df_info <- compound_df()
+      data <- df_info$data
+      compound_col <- df_info$compound_col
+      group_vector <- df_info$group_vector
+      group_colors <- df_info$group_colors
+
       height_value <- input$box_plot_height
       signif_check_value <- input$checkbox_signif
       compound_selected <- input$selected_compound
       plot_type <- input$plot_type
-      req(data_loaded, height_value, compound_selected)
-
-      compound_col <- data_loaded$get_compound_col()
-      group_vector <- data_loaded$get_group_vector()
-      group_colors <- data_loaded$get_group_colors()
-      data <- data_loaded$get_data_excl_metadata()
-      validate(need(!is.null(data), "No data available"))
+      req(height_value, compound_selected)
 
       selected_row <- data[data[[compound_col]] == compound_selected, ]
       validate(need(nrow(selected_row) == 1, "Selected compound not found or duplicated"))
@@ -69,27 +97,25 @@ mod_box_server <- function(id, data_loader_reactive){
           colors = group_colors
         )
 
-        # Calculate means per group
-        group_means <- aggregate(Value ~ Group, data = df, FUN = mean)
 
-        # Create custom hover text
-        group_means$hover_text <- paste0("Group: ", group_means$Group,
-                                         "<br>Mean: ", round(group_means$Value, 2))
-
-        # Add mean points with custom tooltip
-        p <- p %>%
-          plotly::add_trace(
-            data = group_means,
-            x = ~Group,
-            y = ~Value,
-            type = "scatter",
-            mode = "markers",
-            marker = list(symbol = "diamond", size = 9, color = group_colors),
-            text = ~hover_text,
-            hoverinfo = "text",
-            inherit = FALSE,
-            showlegend = FALSE
-          )
+        # group_means <- aggregate(Value ~ Group, data = df, FUN = mean)
+        #
+        # group_means$hover_text <- paste0("Group: ", group_means$Group,
+        #                                  "<br>Mean: ", round(group_means$Value, 2))
+        #
+        # p <- p %>%
+        #   plotly::add_trace(
+        #     data = group_means,
+        #     x = ~Group,
+        #     y = ~Value,
+        #     type = "scatter",
+        #     mode = "markers",
+        #     marker = list(symbol = "diamond", size = 9, color = group_colors),
+        #     text = ~hover_text,
+        #     hoverinfo = "text",
+        #     inherit = FALSE,
+        #     showlegend = FALSE
+        #   )
       } else if (plot_type == "violin") {
         p <- plotly::plot_ly(df, x = ~Group, y = ~Value, type = "violin",
                      color = ~Group, colors = group_colors,
@@ -118,6 +144,8 @@ mod_box_server <- function(id, data_loader_reactive){
         offset_step <- y_range * 0.05
         current_offset <- 0
 
+        pval_list <- list()
+
         for (i in seq_along(combinations)) {
           g1 <- combinations[[i]][1]
           g2 <- combinations[[i]][2]
@@ -132,8 +160,13 @@ mod_box_server <- function(id, data_loader_reactive){
             warning = function(w) NULL
           )
           if (!is.null(test) && !is.na(test$p.value)) {
-            print(paste("Comparing groups", g1, "vs", g2, "p-value:", test$p.value))
+            #print(paste("Comparing groups", g1, "vs", g2, "p-value:", test$p.value))
             pval <- test$p.value
+            pval_list[[length(pval_list) + 1]] <- data.frame(
+              Group1 = g1,
+              Group2 = g2,
+              Pvalue = signif(pval, 3)
+            )
             if (pval < 0.05) {
               label <- if (pval < 0.001) "***"
               else if (pval < 0.01) "**"
@@ -173,6 +206,12 @@ mod_box_server <- function(id, data_loader_reactive){
               current_offset <- current_offset + offset_step
             }
           }
+        }
+        if (length(pval_list) > 0) {
+          pval_df <- do.call(rbind, pval_list)
+          pvalues_reactive(pval_df)
+        } else {
+          pvalues_reactive(NULL)
         }
       }
 
